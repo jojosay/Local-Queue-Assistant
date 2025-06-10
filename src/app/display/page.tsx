@@ -9,13 +9,25 @@ import type { Counter } from '@/app/admin/counters/page';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+// Duplicating Ticket interface here for clarity, ensure it matches staff dashboard's
 interface Ticket {
   id: string;
   number: string;
   service: string;
-  officeId?: string;
+  officeId: string;
+  counterId: string; // Crucial for matching to the right counter
+  timestamp: number;
+  // timeWaiting is not usually stored, but calculated for display
+}
+
+interface QueueItemForDisplay { // For the general queue list
+  id: string;
+  number: string;
+  service: string;
+  officeId: string;
   timestamp: number;
 }
+
 
 function DisplayPageContent() {
   const [officesWithCountersData, setOfficesWithCountersData] = useState<OfficeWithCountersAndTickets[]>([]);
@@ -31,7 +43,7 @@ function DisplayPageContent() {
       try {
         storedOfficesRaw = localStorage.getItem('appOffices');
         storedCountersRaw = localStorage.getItem('appCounters');
-        storedQueueRaw = localStorage.getItem('appQueue');
+        storedQueueRaw = localStorage.getItem('appQueue'); // General queue of waiting tickets
       } catch (e) {
         console.error("Error accessing localStorage:", e);
         setIsLoading(false);
@@ -40,7 +52,7 @@ function DisplayPageContent() {
       
       const allOffices: Office[] = storedOfficesRaw ? JSON.parse(storedOfficesRaw) : [];
       const allCounters: Counter[] = storedCountersRaw ? JSON.parse(storedCountersRaw) : [];
-      const allTickets: Ticket[] = storedQueueRaw ? JSON.parse(storedQueueRaw) : [];
+      const generalQueue: QueueItemForDisplay[] = storedQueueRaw ? JSON.parse(storedQueueRaw) : [];
 
       let activeOffices = allOffices.filter(office => office.status === 'Active');
       let currentDisplayTitle = "Live Queue Display";
@@ -51,7 +63,6 @@ function DisplayPageContent() {
           activeOffices = [filteredOffice];
           currentDisplayTitle = `Live Queue Display - ${filteredOffice.name}`;
         } else {
-          // If filterOfficeId is provided but not found, show "no active offices"
           activeOffices = []; 
           currentDisplayTitle = `Live Queue Display - Office Not Found`;
         }
@@ -62,31 +73,40 @@ function DisplayPageContent() {
         const officeCounters = allCounters
           .filter(counter => counter.officeId === office.id && counter.status === 'Open')
           .map(counter => {
-            const currentTicketKey = 'appCurrentTicket-' + (counter.officeId || 'general') + '-' + counter.id; // More specific key per counter
+            // Key for the ticket currently being served AT THIS SPECIFIC counter
+            const currentTicketKey = `appCurrentTicket-${office.id}-${counter.id}`;
             const storedCurrentTicket = localStorage.getItem(currentTicketKey);
             let currentTicketObj: Ticket | null = null;
+
             if(storedCurrentTicket) {
                 try {
-                    const parsed = JSON.parse(storedCurrentTicket);
-                     // Ensure current ticket matches office and counter context
-                    if(parsed.officeId === counter.officeId) { // Check if ticket belongs to this counter's office
+                    const parsed: Ticket = JSON.parse(storedCurrentTicket);
+                    // Validate that this ticket actually belongs to this specific counter
+                    if(parsed.officeId === office.id && parsed.counterId === counter.id) {
                         currentTicketObj = parsed;
+                    } else {
+                        // console.warn(`Stale/mismatched ticket for key ${currentTicketKey}. Expected office ${office.id}/counter ${counter.id}, got office ${parsed.officeId}/counter ${parsed.counterId}`);
+                        localStorage.removeItem(currentTicketKey); // Clean up stale/mismatched ticket
                     }
-                } catch (e) { /* ignore parse error */ }
+                } catch (e) { 
+                    // console.error(`Error parsing current ticket for key ${currentTicketKey}:`, e);
+                    localStorage.removeItem(currentTicketKey); // Clean up unparseable ticket
+                }
             }
 
-            const nextTicketsForCounter = allTickets
-              .filter(t => t.officeId === counter.officeId && t.id !== currentTicketObj?.id)
+            // Filter general queue for tickets belonging to this office, not currently served
+            const nextTicketsForCounterOffice = generalQueue
+              .filter(t => t.officeId === office.id && t.id !== currentTicketObj?.id)
               .sort((a,b) => a.timestamp - b.timestamp)
               .map(t => t.number)
-              .slice(0, 4);
+              .slice(0, 4); // Show next few tickets for the office (not specific to counter for "Next Up")
 
             return {
               id: counter.id,
               name: counter.name,
               priority: counter.priority,
               currentTicket: currentTicketObj ? currentTicketObj.number : null,
-              nextTickets: nextTicketsForCounter,
+              nextTickets: nextTicketsForCounterOffice, // These are for the office pool
             };
           });
 
@@ -96,14 +116,14 @@ function DisplayPageContent() {
           address: office.address,
           counters: officeCounters,
         };
-      }).filter(office => office.counters.length > 0 || filterOfficeId); // If filtering, show office even if no counters, to display "no counters" message
+      }).filter(office => office.counters.length > 0 || (filterOfficeId && office.id === filterOfficeId));
 
       setOfficesWithCountersData(data);
       setIsLoading(false);
     };
 
     loadAndProcessData();
-    const intervalId = setInterval(loadAndProcessData, 5000);
+    const intervalId = setInterval(loadAndProcessData, 3000); // Refresh slightly faster
     return () => clearInterval(intervalId);
   }, [filterOfficeId]);
 
@@ -164,6 +184,3 @@ export default function DisplayPage() {
     </Suspense>
   );
 }
-
-
-    

@@ -10,12 +10,13 @@ import { useState } from 'react';
 
 interface StaffControlsProps {
   currentTicketNumber: string | null | undefined;
-  counterDetails: string;
+  counterDetails: string; // This will be the specific counter name or general office if no counter assigned
   onCallNext: () => void;
   onComplete: () => void;
   onSkip: () => void;
   isQueueEmpty: boolean;
   isTicketActive: boolean;
+  isDisabled?: boolean; // Added to disable controls if staff cannot operate a counter
 }
 
 export function StaffControls({ 
@@ -25,16 +26,25 @@ export function StaffControls({
   onComplete, 
   onSkip,
   isQueueEmpty,
-  isTicketActive
+  isTicketActive,
+  isDisabled = false // Default to false
 }: StaffControlsProps) {
   const { toast } = useToast();
   const [isAnnouncing, setIsAnnouncing] = useState(false);
 
   const handleLocalCallNext = () => {
+    if (isDisabled) {
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot call next. Ensure you are assigned to an open counter.' });
+        return;
+    }
     onCallNext();
   };
 
   const handleLocalComplete = () => {
+    if (isDisabled) {
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot complete ticket. No active counter assignment.' });
+        return;
+    }
     if (!isTicketActive) {
         toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket is currently being served.' });
         return;
@@ -43,24 +53,36 @@ export function StaffControls({
   };
 
   const handleLocalSkip = () => {
-     if (!isTicketActive) {
+    if (isDisabled) {
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot skip ticket. No active counter assignment.' });
+        return;
+    }
+    if (!isTicketActive) {
         toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket is currently being served.' });
         return;
     }
     onSkip();
   };
 
-  const triggerVoiceAnnouncement = async (ticketNumber: string, counter: string, actionType: string = "Calling ticket") => {
+  const triggerVoiceAnnouncement = async (ticketNumber: string, counterName: string, actionType: string = "Calling ticket") => {
+    if (isDisabled && actionType !== "Admin Action") { // Admins might not have counterDetails in the same way for announcements if this was global
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot announce. No active counter assignment.' });
+        return;
+    }
     if (!ticketNumber) {
       toast({ variant: 'destructive', title: 'Announcement Failed', description: 'No ticket number to announce.' });
       return;
     }
+    if (!counterName || counterName === "Unassigned" || counterName.startsWith("No open counters") || counterName.startsWith("Error loading")) {
+      toast({ variant: 'destructive', title: 'Announcement Failed', description: 'Counter details are not properly set up for announcement.' });
+      return;
+    }
     setIsAnnouncing(true);
     try {
-      const result = await handleVoiceAnnouncement({ ticketNumber, counterDetails: counter });
+      const result = await handleVoiceAnnouncement({ ticketNumber, counterDetails: counterName }); // Use counterName
       toast({
         title: 'Voice Announcement Sent',
-        description: `${actionType} ${ticketNumber} to ${counter}. Announcement: "${result.announcementText}"`,
+        description: `${actionType} ${ticketNumber} to ${counterName}. Announcement: "${result.announcementText}"`,
       });
     } catch (error) {
       console.error('Voice announcement failed:', error);
@@ -75,15 +97,22 @@ export function StaffControls({
   };
   
   const onRecall = async () => {
+    if (isDisabled) {
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot recall. No active counter assignment.' });
+        return;
+    }
     if (!currentTicketNumber) {
         toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket to recall.' });
         return;
     }
-    // toast({ title: 'Recalled Ticket', description: `Recalling ticket ${currentTicketNumber}.` }); // Toast is handled by triggerVoiceAnnouncement
     await triggerVoiceAnnouncement(currentTicketNumber, counterDetails, "Recalling ticket");
   };
   
   const onAnnounceManually = async () => {
+    if (isDisabled) {
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot announce. No active counter assignment.' });
+        return;
+    }
      if (!currentTicketNumber) {
         toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket to announce.' });
         return;
@@ -103,22 +132,22 @@ export function StaffControls({
           onClick={handleLocalCallNext} 
           size="lg" 
           className="col-span-2 md:col-span-3 bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
-          disabled={isAnnouncing || (isQueueEmpty && !isTicketActive)} // Disable if announcing or queue is empty and no active ticket to clear first
+          disabled={isDisabled || isAnnouncing || (isQueueEmpty && !isTicketActive)}
         >
           <PlayIcon className="mr-2 h-5 w-5" /> Call Next Customer
         </Button>
         
-        <Button onClick={handleLocalComplete} variant="outline" size="lg" disabled={isAnnouncing || !isTicketActive}>
+        <Button onClick={handleLocalComplete} variant="outline" size="lg" disabled={isDisabled || isAnnouncing || !isTicketActive}>
           <CheckCircle2Icon className="mr-2 h-5 w-5" /> Complete
         </Button>
-        <Button onClick={handleLocalSkip} variant="outline" size="lg" disabled={isAnnouncing || !isTicketActive}>
+        <Button onClick={handleLocalSkip} variant="outline" size="lg" disabled={isDisabled || isAnnouncing || !isTicketActive}>
           <SkipForwardIcon className="mr-2 h-5 w-5" /> Skip
         </Button>
-        <Button onClick={onRecall} variant="outline" size="lg" disabled={isAnnouncing || !isTicketActive}>
+        <Button onClick={onRecall} variant="outline" size="lg" disabled={isDisabled || isAnnouncing || !isTicketActive}>
           {isAnnouncing && currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <RotateCcwIcon className="mr-2 h-5 w-5" /> Recall
         </Button>
-         <Button onClick={onAnnounceManually} variant="outline" size="lg" className="col-span-2 md:col-span-3" disabled={isAnnouncing || !isTicketActive}>
+         <Button onClick={onAnnounceManually} variant="outline" size="lg" className="col-span-2 md:col-span-3" disabled={isDisabled || isAnnouncing || !isTicketActive}>
           {isAnnouncing && currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Volume2Icon className="mr-2 h-5 w-5" /> Announce Current Ticket
         </Button>
