@@ -6,38 +6,87 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { PlayIcon, CheckCircle2Icon, SkipForwardIcon, RotateCcwIcon, Volume2Icon, Loader2 } from 'lucide-react';
 import { handleVoiceAnnouncement } from '@/app/staff/dashboard/actions';
-import { useState } from 'react';
+import type { NotificationPreference } from '@/app/staff/dashboard/page'; // Import the type
 
 interface StaffControlsProps {
   currentTicketNumber: string | null | undefined;
-  counterDetails: string; // This will be the specific counter name or general office if no counter assigned
+  counterDetails: string;
+  assignedCounterName: string | null; // For more precise announcements
+  notificationPreference: NotificationPreference;
   onCallNext: () => void;
   onComplete: () => void;
   onSkip: () => void;
   isQueueEmpty: boolean;
   isTicketActive: boolean;
-  isDisabled?: boolean; // Added to disable controls if staff cannot operate a counter
+  isDisabled?: boolean;
+  isAnnouncing: boolean; // Receive from parent
+  setIsAnnouncing: (isAnnouncing: boolean) => void; // Receive from parent
 }
 
 export function StaffControls({ 
   currentTicketNumber, 
-  counterDetails, 
+  counterDetails, // General display string (e.g. "Counter 1 at Main Office")
+  assignedCounterName, // Specific name of the counter (e.g. "Counter 1")
+  notificationPreference,
   onCallNext, 
   onComplete, 
   onSkip,
   isQueueEmpty,
   isTicketActive,
-  isDisabled = false // Default to false
+  isDisabled = false,
+  isAnnouncing,
+  setIsAnnouncing
 }: StaffControlsProps) {
   const { toast } = useToast();
-  const [isAnnouncing, setIsAnnouncing] = useState(false);
 
+  const effectiveCounterName = assignedCounterName || counterDetails; // Use specific counter name if available for announcements
+
+  const handleTicketActionNotification = async (ticketNum: string, counterNameForAction: string, actionDescription: string) => {
+    if (isDisabled) {
+        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot perform action. No active counter assignment.' });
+        return;
+    }
+    if (!ticketNum) {
+      toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket number to act upon.' });
+      return;
+    }
+    if (!counterNameForAction || counterNameForAction === "Unassigned" || counterNameForAction.startsWith("No open counters") || counterNameForAction.startsWith("Error loading")) {
+      toast({ variant: 'destructive', title: 'Action Failed', description: 'Counter details are not properly set up.' });
+      return;
+    }
+
+    if (notificationPreference === 'voice') {
+      setIsAnnouncing(true);
+      try {
+        const result = await handleVoiceAnnouncement({ ticketNumber: ticketNum, counterDetails: counterNameForAction });
+        toast({
+          title: 'Voice Announcement Sent',
+          description: `${actionDescription} ${ticketNum} to ${counterNameForAction}. Announcement: "${result.announcementText}"`,
+        });
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Voice Announcement Failed',
+          description: `Could not generate voice announcement. ${error instanceof Error ? error.message : String(error)}`,
+        });
+      } finally {
+        setIsAnnouncing(false);
+      }
+    } else if (notificationPreference === 'sound') {
+      // Placeholder for actual sound playback
+      toast({
+        title: 'Notification Sound 🔔',
+        description: `${actionDescription} ${ticketNum} to ${counterNameForAction}. (Sound would play here)`,
+      });
+    }
+  };
+  
   const handleLocalCallNext = () => {
     if (isDisabled) {
         toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot call next. Ensure you are assigned to an open counter.' });
         return;
     }
-    onCallNext();
+    onCallNext(); // The parent (StaffDashboardPage) will handle the initial announcement/sound
   };
 
   const handleLocalComplete = () => {
@@ -63,61 +112,21 @@ export function StaffControls({
     }
     onSkip();
   };
-
-  const triggerVoiceAnnouncement = async (ticketNumber: string, counterName: string, actionType: string = "Calling ticket") => {
-    if (isDisabled && actionType !== "Admin Action") { // Admins might not have counterDetails in the same way for announcements if this was global
-        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot announce. No active counter assignment.' });
-        return;
-    }
-    if (!ticketNumber) {
-      toast({ variant: 'destructive', title: 'Announcement Failed', description: 'No ticket number to announce.' });
-      return;
-    }
-    if (!counterName || counterName === "Unassigned" || counterName.startsWith("No open counters") || counterName.startsWith("Error loading")) {
-      toast({ variant: 'destructive', title: 'Announcement Failed', description: 'Counter details are not properly set up for announcement.' });
-      return;
-    }
-    setIsAnnouncing(true);
-    try {
-      const result = await handleVoiceAnnouncement({ ticketNumber, counterDetails: counterName }); // Use counterName
-      toast({
-        title: 'Voice Announcement Sent',
-        description: `${actionType} ${ticketNumber} to ${counterName}. Announcement: "${result.announcementText}"`,
-      });
-    } catch (error) {
-      console.error('Voice announcement failed:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Voice Announcement Failed',
-        description: `Could not generate voice announcement. ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      setIsAnnouncing(false);
-    }
-  };
   
   const onRecall = async () => {
-    if (isDisabled) {
-        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot recall. No active counter assignment.' });
-        return;
-    }
     if (!currentTicketNumber) {
         toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket to recall.' });
         return;
     }
-    await triggerVoiceAnnouncement(currentTicketNumber, counterDetails, "Recalling ticket");
+    await handleTicketActionNotification(currentTicketNumber, effectiveCounterName, "Recalling ticket");
   };
   
   const onAnnounceManually = async () => {
-    if (isDisabled) {
-        toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot announce. No active counter assignment.' });
-        return;
-    }
      if (!currentTicketNumber) {
         toast({ variant: 'destructive', title: 'Action Failed', description: 'No ticket to announce.' });
         return;
     }
-    await triggerVoiceAnnouncement(currentTicketNumber, counterDetails, "Announcing ticket");
+    await handleTicketActionNotification(currentTicketNumber, effectiveCounterName, "Announcing ticket");
   }
 
 
@@ -144,14 +153,15 @@ export function StaffControls({
           <SkipForwardIcon className="mr-2 h-5 w-5" /> Skip
         </Button>
         <Button onClick={onRecall} variant="outline" size="lg" disabled={isDisabled || isAnnouncing || !isTicketActive}>
-          {isAnnouncing && currentTicketNumber === currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isAnnouncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <RotateCcwIcon className="mr-2 h-5 w-5" /> Recall
         </Button>
          <Button onClick={onAnnounceManually} variant="outline" size="lg" className="col-span-2 md:col-span-3" disabled={isDisabled || isAnnouncing || !isTicketActive}>
-          {isAnnouncing && currentTicketNumber === currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isAnnouncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Volume2Icon className="mr-2 h-5 w-5" /> Announce Current Ticket
         </Button>
       </CardContent>
     </Card>
   );
 }
+

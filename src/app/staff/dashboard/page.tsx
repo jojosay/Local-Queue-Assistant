@@ -7,12 +7,16 @@ import { PageHeader } from '@/components/shared/page-header';
 import { StaffControls } from '@/components/staff/staff-controls';
 import { NowServingCard } from '@/components/staff/now-serving-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ListChecksIcon, UsersIcon, AlertTriangleIcon, TvIcon } from 'lucide-react';
+import { ListChecksIcon, UsersIcon, AlertTriangleIcon, TvIcon, Settings2Icon, BellRingIcon, MicIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import type { Counter } from '@/app/admin/counters/page';
 import type { Office } from '@/app/admin/offices/page';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { handleVoiceAnnouncement as serverHandleVoiceAnnouncement } from './actions';
+
 
 interface Ticket {
   id: string;
@@ -33,16 +37,21 @@ interface QueueItem {
   timestamp: number;
 }
 
+export type NotificationPreference = 'voice' | 'sound';
+
 export default function StaffDashboardPage() {
   const [currentTicket, setCurrentTicket] = useState<Ticket | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [counterDetails, setCounterDetails] = useState<string>("Loading..."); // Will be specific counter name
+  const [counterDetails, setCounterDetails] = useState<string>("Loading...");
   const [staffOfficeId, setStaffOfficeId] = useState<string | null>(null);
   const [staffOfficeName, setStaffOfficeName] = useState<string | null>(null);
   const [assignedCounterId, setAssignedCounterId] = useState<string | null>(null);
   const [assignedCounterName, setAssignedCounterName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>('voice');
+  const [isAnnouncing, setIsAnnouncing] = useState(false);
+
 
   const { toast } = useToast();
 
@@ -55,6 +64,12 @@ export default function StaffDashboardPage() {
     setStaffOfficeId(officeId);
     setStaffOfficeName(officeName);
 
+    const storedPreference = localStorage.getItem('appStaffNotificationPreference') as NotificationPreference | null;
+    if (storedPreference && (storedPreference === 'voice' || storedPreference === 'sound')) {
+      setNotificationPreference(storedPreference);
+    }
+
+
     let currentAssignedCounter: Counter | null = null;
 
     if (officeId && role === 'staff') {
@@ -64,7 +79,7 @@ export default function StaffDashboardPage() {
           const allCounters: Counter[] = JSON.parse(storedCountersRaw);
           const openCountersInOffice = allCounters.filter(c => c.officeId === officeId && c.status === 'Open');
           if (openCountersInOffice.length > 0) {
-            currentAssignedCounter = openCountersInOffice[0]; // Assign to the first open counter
+            currentAssignedCounter = openCountersInOffice[0]; 
             setAssignedCounterId(currentAssignedCounter.id);
             setAssignedCounterName(currentAssignedCounter.name);
             setCounterDetails(`${currentAssignedCounter.name} at ${officeName || 'Office'}`);
@@ -79,7 +94,7 @@ export default function StaffDashboardPage() {
         setCounterDetails("Error loading counter details");
       }
     } else if (role === 'admin') {
-      setCounterDetails("Admin Global View"); // Admin doesn't operate a specific counter this way
+      setCounterDetails("Admin Global View"); 
     } else {
       setCounterDetails("Unassigned");
     }
@@ -106,17 +121,15 @@ export default function StaffDashboardPage() {
     } else if (officeId) {
       setQueue(allTickets.filter(t => t.officeId === officeId).sort((a,b) => a.timestamp - b.timestamp));
     } else {
-      setQueue(allTickets.filter(t => !t.officeId).sort((a,b) => a.timestamp - b.timestamp)); // General queue if no officeId
+      setQueue(allTickets.filter(t => !t.officeId).sort((a,b) => a.timestamp - b.timestamp)); 
     }
 
-    // Load current ticket for this specific counter if staff and counter assigned
     if (officeId && currentAssignedCounter) {
       const currentTicketKey = `appCurrentTicket-${officeId}-${currentAssignedCounter.id}`;
       try {
         const storedCurrentTicket = localStorage.getItem(currentTicketKey);
         if (storedCurrentTicket) {
           const parsedTicket: Ticket = JSON.parse(storedCurrentTicket);
-          // Ensure current ticket matches staff's office and assigned counter context
           if (parsedTicket.officeId === officeId && parsedTicket.counterId === currentAssignedCounter.id) {
             setCurrentTicket(parsedTicket);
           }
@@ -151,18 +164,20 @@ export default function StaffDashboardPage() {
     if (isDataLoaded && staffOfficeId && assignedCounterId) {
       const key = `appCurrentTicket-${staffOfficeId}-${assignedCounterId}`;
       if (currentTicket) {
-        // Ensure currentTicket being saved has correct officeId and counterId
         if (currentTicket.officeId === staffOfficeId && currentTicket.counterId === assignedCounterId) {
             localStorage.setItem(key, JSON.stringify(currentTicket));
-        } else {
-            // console.warn("Attempted to save currentTicket with mismatched office/counter ID", currentTicket);
-            // This case should ideally not happen if logic is correct elsewhere
         }
       } else {
         localStorage.removeItem(key);
       }
     }
   }, [currentTicket, staffOfficeId, assignedCounterId, isDataLoaded]);
+
+  useEffect(() => {
+    if (isDataLoaded) {
+        localStorage.setItem('appStaffNotificationPreference', notificationPreference);
+    }
+  }, [notificationPreference, isDataLoaded]);
 
   const calculateWaitingTime = (timestamp: number) => {
     const diffMs = Date.now() - timestamp;
@@ -171,18 +186,46 @@ export default function StaffDashboardPage() {
     return `${diffMins}m ${diffSecs}s`;
   };
 
+  const executeTicketNotification = async (ticketNumber: string, counterName: string, actionType: string) => {
+    if (notificationPreference === 'voice') {
+      setIsAnnouncing(true);
+      try {
+        const result = await serverHandleVoiceAnnouncement({ ticketNumber, counterDetails: counterName });
+        toast({
+          title: 'Voice Announcement Sent',
+          description: `${actionType} ${ticketNumber} to ${counterName}. Announcement: "${result.announcementText}"`,
+        });
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Voice Announcement Failed',
+          description: `Could not generate voice announcement. ${error instanceof Error ? error.message : String(error)}`,
+        });
+      } finally {
+        setIsAnnouncing(false);
+      }
+    } else if (notificationPreference === 'sound') {
+      // Placeholder for actual sound playback
+      toast({
+        title: 'Notification Sound 🔔',
+        description: `${actionType} ${ticketNumber} to ${counterName}. (Sound would play here)`,
+      });
+    }
+  };
+
+
   const handleCallNext = () => {
     if (userRole === 'admin') {
         toast({ title: 'Admin Action', description: 'Admins observe queues, staff operate counters.', variant: 'default' });
         return;
     }
-    if (!staffOfficeId || !assignedCounterId) {
+    if (!staffOfficeId || !assignedCounterId || !assignedCounterName) {
       toast({ title: 'Cannot Call Next', description: 'Staff not assigned to an active counter or office.', variant: 'destructive' });
       return;
     }
     if (queue.length === 0) {
       toast({ title: 'Queue Empty', description: `No customers waiting for ${staffOfficeName || 'this office'}.`, variant: 'destructive' });
-      setCurrentTicket(null); // Clear any existing ticket if queue is now empty
+      setCurrentTicket(null);
       return;
     }
 
@@ -191,7 +234,7 @@ export default function StaffDashboardPage() {
     const newCurrentTicket: Ticket = {
       id: nextCustomer.id,
       number: nextCustomer.number,
-      service: nextCustomer.service, // This might be office name or specific service type
+      service: nextCustomer.service,
       timeWaiting: calculateWaitingTime(nextCustomer.timestamp),
       officeId: staffOfficeId,
       counterId: assignedCounterId,
@@ -200,7 +243,10 @@ export default function StaffDashboardPage() {
 
     setCurrentTicket(newCurrentTicket);
     setQueue(prevQueue => prevQueue.filter(ticket => ticket.id !== nextCustomer.id));
-    toast({ title: 'Called Next', description: `Now serving ticket ${newCurrentTicket.number} at ${assignedCounterName || 'counter'}.` });
+    toast({ title: 'Called Next', description: `Now serving ticket ${newCurrentTicket.number} at ${assignedCounterName}.` });
+    
+    // Execute notification based on preference
+    executeTicketNotification(newCurrentTicket.number, assignedCounterName, "Calling ticket");
   };
 
   const handleCompleteTicket = () => {
@@ -213,7 +259,7 @@ export default function StaffDashboardPage() {
       return;
     }
     const completedTicketNumber = currentTicket.number;
-    setCurrentTicket(null); // This will trigger the useEffect to remove it from localStorage for this counter
+    setCurrentTicket(null); 
     toast({ title: 'Ticket Completed', description: `Ticket ${completedTicketNumber} at ${assignedCounterName || 'counter'} marked as complete.` });
   };
 
@@ -227,7 +273,7 @@ export default function StaffDashboardPage() {
       return;
     }
     const skippedTicketNumber = currentTicket.number;
-    setCurrentTicket(null); // Skipped ticket is cleared from current serving
+    setCurrentTicket(null); 
     toast({ title: 'Ticket Skipped', description: `Ticket ${skippedTicketNumber} at ${assignedCounterName || 'counter'} skipped.` });
   };
 
@@ -273,17 +319,47 @@ export default function StaffDashboardPage() {
           <NowServingCard ticket={currentTicket} counterDetails={counterDetails} />
           <StaffControls
             currentTicketNumber={currentTicket?.number}
-            counterDetails={counterDetails} // This is now the specific counter name or office name
+            counterDetails={counterDetails}
+            assignedCounterName={assignedCounterName}
+            notificationPreference={notificationPreference}
             onCallNext={handleCallNext}
             onComplete={handleCompleteTicket}
             onSkip={handleSkipTicket}
             isQueueEmpty={queue.length === 0}
             isTicketActive={!!currentTicket}
-            isDisabled={!canOperateCounter && userRole !== 'admin'} // Disable controls if not staff at active counter
+            isDisabled={!canOperateCounter && userRole !== 'admin'}
+            isAnnouncing={isAnnouncing}
+            setIsAnnouncing={setIsAnnouncing}
           />
         </div>
 
         <div className="space-y-6">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <Settings2Icon className="h-6 w-6 text-primary" />
+                        <CardTitle className="font-headline text-xl">Notification Settings</CardTitle>
+                    </div>
+                     <CardDescription>Choose how you want to be notified for ticket actions.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <RadioGroup 
+                        defaultValue={notificationPreference} 
+                        onValueChange={(value: string) => setNotificationPreference(value as NotificationPreference)}
+                        disabled={!canOperateCounter && userRole !== 'admin'}
+                    >
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="voice" id="pref-voice" />
+                            <Label htmlFor="pref-voice" className="flex items-center gap-2"><MicIcon className="h-4 w-4"/> AI Voice Call-out</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="sound" id="pref-sound" />
+                            <Label htmlFor="pref-sound" className="flex items-center gap-2"><BellRingIcon className="h-4 w-4"/> Simple Sound Alert</Label>
+                        </div>
+                    </RadioGroup>
+                </CardContent>
+            </Card>
+
             <Card className="shadow-lg">
             <CardHeader>
                 <div className="flex items-center justify-between">
@@ -345,3 +421,4 @@ export default function StaffDashboardPage() {
     </StaffLayout>
   );
 }
+
