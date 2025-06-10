@@ -27,6 +27,14 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
 
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginFormSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
   useEffect(() => {
     // Load registered users from localStorage on component mount
     try {
