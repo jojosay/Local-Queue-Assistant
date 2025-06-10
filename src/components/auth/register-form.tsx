@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import type { User } from '@/app/admin/users/page'; // Import the User interface
 
 const registerFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -46,15 +47,49 @@ export function RegisterForm() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Mock registration logic (in a real app, you'd save this to a database)
-    // For now, we'll just show a success message and redirect
-    console.log('Registered user:', { name: values.name, email: values.email });
+    // Save the new user to localStorage
+    try {
+      const storedUsers = localStorage.getItem('appUsers');
+      const users: User[] = storedUsers ? JSON.parse(storedUsers) : [];
 
-    toast({
-      title: 'Registration Successful',
-      description: 'You can now log in with your credentials.',
-    });
-    router.push('/login');
+      // Check if email already exists
+      if (users.some(user => user.email === values.email)) {
+        toast({
+          variant: 'destructive',
+          title: 'Registration Failed',
+          description: 'This email address is already registered.',
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      const newUser: User = {
+        id: `usr${Date.now()}${Math.floor(Math.random() * 100)}`,
+        name: values.name,
+        email: values.email,
+        // Do NOT store password in localStorage directly in a real app
+        role: 'Staff', // Default role for new registrations
+        status: 'Active', // Default status
+        // officeId and officeName will be undefined by default
+      };
+
+      users.push(newUser);
+      localStorage.setItem('appUsers', JSON.stringify(users));
+
+      toast({
+        title: 'Registration Successful',
+        description: 'You can now log in with your credentials.',
+      });
+      router.push('/login');
+
+    } catch (error) {
+      console.error("Failed to save user to localStorage", error);
+      toast({
+        variant: 'destructive',
+        title: 'Registration Error',
+        description: 'Could not save user data. Please try again.',
+      });
+    }
     
     setIsLoading(false);
   }
