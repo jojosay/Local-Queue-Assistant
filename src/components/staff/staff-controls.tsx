@@ -89,7 +89,7 @@ export function StaffControls({
       toast({
         variant: 'destructive',
         title: 'Voice Announcement Failed',
-        description: `Could not generate voice announcement. ${error instanceof Error ? error.message : ''}`,
+        description: `Could not generate voice announcement. ${error instanceof Error ? error.message : String(error)}`,
       });
     } finally {
       setIsAnnouncing(false);
@@ -144,11 +144,11 @@ export function StaffControls({
           <SkipForwardIcon className="mr-2 h-5 w-5" /> Skip
         </Button>
         <Button onClick={onRecall} variant="outline" size="lg" disabled={isDisabled || isAnnouncing || !isTicketActive}>
-          {isAnnouncing && currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isAnnouncing && currentTicketNumber === currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <RotateCcwIcon className="mr-2 h-5 w-5" /> Recall
         </Button>
          <Button onClick={onAnnounceManually} variant="outline" size="lg" className="col-span-2 md:col-span-3" disabled={isDisabled || isAnnouncing || !isTicketActive}>
-          {isAnnouncing && currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isAnnouncing && currentTicketNumber === currentTicketNumber && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Volume2Icon className="mr-2 h-5 w-5" /> Announce Current Ticket
         </Button>
       </CardContent>
