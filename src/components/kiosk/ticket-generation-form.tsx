@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,14 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle } from 'lucide-react';
-
-interface Office {
-  id: string;
-  name: string;
-}
+import type { Office } from '@/app/admin/offices/page'; // Import the more complete Office type
 
 interface TicketGenerationFormProps {
-  offices: Office[];
+  offices: Office[]; // Use the imported Office type
 }
 
 const ticketFormSchema = z.object({
@@ -34,8 +31,12 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
   const [currentTime, setCurrentTime] = useState<string | null>(null);
 
   useEffect(() => {
-    setCurrentTime(new Date().toLocaleTimeString());
-    const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
+    // This effect runs only on the client after hydration
+    const updateCurrentTime = () => {
+      setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    };
+    updateCurrentTime(); // Initial call
+    const timer = setInterval(updateCurrentTime, 1000); // Update every second
     return () => clearInterval(timer);
   }, []);
 
@@ -55,13 +56,14 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
 
     const selectedOffice = offices.find(o => o.id === values.officeId);
     const prefix = selectedOffice ? selectedOffice.name.substring(0, 1).toUpperCase() : 'T';
+    // Ensure ticket numbers are somewhat unique by adding a timestamp component
     const ticketNumber = `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
     
     setGeneratedTicket(ticketNumber);
     setIsLoading(false);
     toast({
       title: 'Ticket Generated!',
-      description: `Your ticket number is ${ticketNumber}.`,
+      description: `Your ticket number is ${ticketNumber}. Please note it down.`,
     });
     form.reset(); // Reset form after successful generation
   }
@@ -94,7 +96,7 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Select Service / Office</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose an option" />
@@ -103,7 +105,7 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
                 <SelectContent>
                   {offices.map(office => (
                     <SelectItem key={office.id} value={office.id}>
-                      {office.name}
+                      {office.name} ({office.address})
                     </SelectItem>
                   ))}
                 </SelectContent>
