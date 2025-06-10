@@ -25,11 +25,8 @@ export interface User {
   officeName?: string;
 }
 
-// Removed initialMockUsers
-// const initialMockUsers: User[] = [ ... ];
-
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]); // Initialize with empty array
+  const [users, setUsers] = useState<User[]>([]);
   const [availableOffices, setAvailableOffices] = useState<Office[]>([]);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -38,15 +35,41 @@ export default function UsersPage() {
 
   useEffect(() => {
     // Load users from localStorage
-    const storedUsers = localStorage.getItem('appUsers');
-    if (storedUsers) {
-      setUsers(JSON.parse(storedUsers));
+    try {
+      const storedUsersRaw = localStorage.getItem('appUsers');
+      if (storedUsersRaw) {
+        const parsedUsers = JSON.parse(storedUsersRaw);
+        if (Array.isArray(parsedUsers)) {
+          setUsers(parsedUsers);
+        } else {
+          console.warn("'appUsers' in localStorage was not an array. Initializing with empty array for UsersPage.");
+          setUsers([]);
+          localStorage.setItem('appUsers', JSON.stringify([])); // Correct it
+        }
+      } else {
+        setUsers([]); // Initialize with empty if nothing stored
+      }
+    } catch (error) {
+      console.error("Failed to parse 'appUsers' from localStorage in UsersPage. Initializing with empty array. Error:", error);
+      setUsers([]);
+      localStorage.setItem('appUsers', JSON.stringify([])); // Optionally clear/reset corrupted data
     }
+
     // Load offices from localStorage
     const storedOffices = localStorage.getItem('appOffices');
     if (storedOffices) {
-      const allOffices: Office[] = JSON.parse(storedOffices);
-      setAvailableOffices(allOffices.filter(o => o.status === 'Active'));
+      try {
+        const allOffices: Office[] = JSON.parse(storedOffices);
+         if (Array.isArray(allOffices)) {
+          setAvailableOffices(allOffices.filter(o => o.status === 'Active'));
+        } else {
+          console.warn("'appOffices' in localStorage was not an array. Setting availableOffices to empty.");
+          setAvailableOffices([]);
+        }
+      } catch (e) {
+        console.error("Failed to parse 'appOffices' from localStorage in UsersPage. Error:", e);
+        setAvailableOffices([]);
+      }
     } else {
       setAvailableOffices([]);
     }

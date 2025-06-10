@@ -49,8 +49,24 @@ export function RegisterForm() {
 
     // Save the new user to localStorage
     try {
-      const storedUsers = localStorage.getItem('appUsers');
-      const users: User[] = storedUsers ? JSON.parse(storedUsers) : [];
+      const storedUsersRaw = localStorage.getItem('appUsers');
+      let users: User[] = [];
+
+      if (storedUsersRaw) {
+        try {
+          const parsedUsers = JSON.parse(storedUsersRaw);
+          if (Array.isArray(parsedUsers)) {
+            users = parsedUsers;
+          } else {
+            console.warn("'appUsers' in localStorage was not an array. Resetting to empty array for registration.");
+            users = [];
+          }
+        } catch (parseError) {
+          console.error("Failed to parse 'appUsers' from localStorage in RegisterForm. Resetting. Error:", parseError);
+          users = [];
+          localStorage.removeItem('appUsers'); // Clear corrupted data
+        }
+      }
 
       // Check if email already exists
       if (users.some(user => user.email === values.email)) {
@@ -83,7 +99,7 @@ export function RegisterForm() {
       router.push('/login');
 
     } catch (error) {
-      console.error("Failed to save user to localStorage", error);
+      console.error("Failed to save user to localStorage during registration:", error);
       toast({
         variant: 'destructive',
         title: 'Registration Error',
