@@ -65,16 +65,16 @@ export function LoginForm() {
     localStorage.removeItem('mockUserOfficeName');
 
     let loginSuccessful = false;
-    let userRole: User['role'] | null = null;
+    let userRoleForRedirect: User['role'] | null = null; // For case-sensitive role for redirect path
     let redirectPath = '/login'; // Default to login page on failure
 
     // Check hardcoded admin credentials
     if (values.email === 'admin@example.com' && values.password === 'password') {
       localStorage.setItem('mockAuthToken', 'admin-token');
-      localStorage.setItem('mockUserRole', 'admin');
+      localStorage.setItem('mockUserRole', 'admin'); // Store as lowercase
       localStorage.setItem('mockUserEmail', values.email);
       // No office for admin by default
-      userRole = 'admin';
+      userRoleForRedirect = 'Admin'; // Use capitalized for path logic
       redirectPath = '/admin/dashboard';
       loginSuccessful = true;
       toast({ title: 'Login Successful', description: 'Redirecting to admin dashboard...' });
@@ -82,11 +82,11 @@ export function LoginForm() {
     // Check hardcoded staff credentials
     else if (values.email === 'staff@example.com' && values.password === 'password') {
       localStorage.setItem('mockAuthToken', 'staff-token');
-      localStorage.setItem('mockUserRole', 'staff');
+      localStorage.setItem('mockUserRole', 'staff'); // Store as lowercase
       localStorage.setItem('mockUserEmail', values.email);
       localStorage.setItem('mockUserOfficeId', 'staff-office-001'); 
       localStorage.setItem('mockUserOfficeName', 'Staff Assigned Office (Default)');
-      userRole = 'staff';
+      userRoleForRedirect = 'Staff'; // Use capitalized for path logic
       redirectPath = '/staff/dashboard';
       loginSuccessful = true;
       toast({ title: 'Login Successful', description: 'Redirecting to staff dashboard...' });
@@ -97,13 +97,13 @@ export function LoginForm() {
       // For registered users, we'll also assume password is "password" for this mock
       if (foundUser && values.password === 'password') { 
         localStorage.setItem('mockAuthToken', `${foundUser.role.toLowerCase()}-token-${foundUser.id}`);
-        localStorage.setItem('mockUserRole', foundUser.role);
+        localStorage.setItem('mockUserRole', foundUser.role.toLowerCase()); // Store as lowercase
         localStorage.setItem('mockUserEmail', foundUser.email);
         if (foundUser.officeId && foundUser.officeName) {
           localStorage.setItem('mockUserOfficeId', foundUser.officeId);
           localStorage.setItem('mockUserOfficeName', foundUser.officeName);
         }
-        userRole = foundUser.role;
+        userRoleForRedirect = foundUser.role; // Use original case for path logic
         redirectPath = foundUser.role === 'Admin' ? '/admin/dashboard' : '/staff/dashboard';
         loginSuccessful = true;
         toast({ title: 'Login Successful', description: `Redirecting to ${foundUser.role.toLowerCase()} dashboard...` });
