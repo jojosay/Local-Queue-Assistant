@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteLogo } from '@/components/shared/site-logo';
-import { UsersIcon, LogInIcon, TicketIcon as KioskIcon, TvIcon } from 'lucide-react'; // Renamed TicketIcon to avoid conflict
+import { LogInIcon, TicketIcon as KioskIcon } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -12,7 +12,7 @@ export default function HomePage() {
         <SiteLogo className="text-3xl" />
       </header>
 
-      <main className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full">
+      <main className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full">
         <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardHeader>
             <div className="flex items-center gap-3 mb-2">
@@ -43,23 +43,6 @@ export default function HomePage() {
           <CardContent>
             <Button asChild className="w-full" variant="outline" size="lg">
               <Link href="/login">Login</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <TvIcon className="h-8 w-8 text-green-500" />
-              <CardTitle className="font-headline text-2xl">Live Queue Display</CardTitle>
-            </div>
-            <CardDescription>
-              View the current status of all service counters and waiting tickets.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full" size="lg" variant="secondary">
-              <Link href="/display">View Display</Link>
             </Button>
           </CardContent>
         </Card>

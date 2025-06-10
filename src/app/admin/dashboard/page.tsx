@@ -1,9 +1,10 @@
+
 import { AdminLayout } from '@/components/layouts/admin-layout';
 import { PageHeader } from '@/components/shared/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { SettingsIcon, BuildingIcon, UsersIcon as CounterIcon, UserCogIcon } from 'lucide-react'; // Renamed UsersIcon to avoid conflict
+import { SettingsIcon, BuildingIcon, UsersIcon as CounterIcon, UserCogIcon, TvIcon } from 'lucide-react';
 
 export default function AdminDashboardPage() {
   return (
@@ -13,7 +14,7 @@ export default function AdminDashboardPage() {
         description="Manage system settings, offices, counters, and staff."
         icon={SettingsIcon}
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 animate-fade-in">
         <FeatureCard
           title="Office Management"
           description="Add, edit, or remove office locations."
@@ -35,7 +36,13 @@ export default function AdminDashboardPage() {
           linkHref="/admin/users"
           linkText="Manage Users"
         />
-        {/* Add more admin feature cards here */}
+        <FeatureCard
+          title="Live Queue Display"
+          description="View current ticket queues for all active offices."
+          icon={TvIcon}
+          linkHref="/display"
+          linkText="View Display"
+        />
       </div>
     </AdminLayout>
   );
@@ -62,7 +69,7 @@ function FeatureCard({ title, description, icon: Icon, linkHref, linkText, disab
       </CardHeader>
       <CardContent>
         <Button asChild className="w-full" disabled={disabled}>
-          <Link href={disabled ? '#' : linkHref}>{linkText}</Link>
+          <Link href={disabled ? '#' : linkHref} target={linkHref === "/display" ? "_blank" : undefined} rel={linkHref === "/display" ? "noopener noreferrer" : undefined}>{linkText}</Link>
         </Button>
       </CardContent>
     </Card>
