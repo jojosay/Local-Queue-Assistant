@@ -9,10 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // Removed AlertDialogTrigger from here as it's not used at the top level
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { UserForm, type UserFormValues } from '@/components/admin/users/user-form';
 import { useToast } from '@/hooks/use-toast';
+import type { Office } from '@/app/admin/offices/page'; // Import Office type
+import { initialMockOffices } from '@/app/admin/offices/page'; // Import mock offices
 
 export interface User {
   id: string;
@@ -20,22 +22,31 @@ export interface User {
   email: string;
   role: 'Admin' | 'Staff';
   status: 'Active' | 'Inactive';
+  officeId?: string;
+  officeName?: string;
 }
 
 // Initial mock data
 const initialMockUsers: User[] = [
-  { id: 'usr001', name: 'Alice Smith', email: 'alice@example.com', role: 'Admin', status: 'Active' },
-  { id: 'usr002', name: 'Bob Johnson', email: 'bob@example.com', role: 'Staff', status: 'Active' },
-  { id: 'usr003', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Staff', status: 'Inactive' },
-  { id: 'usr004', name: 'Diana Prince', email: 'diana@example.com', role: 'Staff', status: 'Active' },
+  { id: 'usr001', name: 'Alice Smith', email: 'alice@example.com', role: 'Admin', status: 'Active' }, // Admin might not have an office
+  { id: 'usr002', name: 'Bob Johnson', email: 'bob@example.com', role: 'Staff', status: 'Active', officeId: 'off001', officeName: 'Main City Branch' },
+  { id: 'usr003', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Staff', status: 'Inactive', officeId: 'off002', officeName: 'North Suburb Office' },
+  { id: 'usr004', name: 'Diana Prince', email: 'diana@example.com', role: 'Staff', status: 'Active', officeId: 'off001', officeName: 'Main City Branch' },
 ];
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>(initialMockUsers);
+  const [availableOffices, setAvailableOffices] = useState<Office[]>(initialMockOffices);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { toast } = useToast();
+
+  // In a real app, availableOffices would likely be fetched or come from context
+  useEffect(() => {
+    // For now, we use the imported mock data.
+    setAvailableOffices(initialMockOffices);
+  }, []);
 
   const handleOpenUserForm = (user?: User) => {
     setEditingUser(user || null);
@@ -48,15 +59,17 @@ export default function UsersPage() {
   };
 
   const handleSaveUser = (data: UserFormValues) => {
+    const selectedOffice = availableOffices.find(o => o.id === data.officeId);
+    const officeName = selectedOffice ? selectedOffice.name : undefined;
+
     if (editingUser) {
-      // Edit existing user
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...data, id: editingUser.id } : u));
+      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, officeName } : u));
       toast({ title: "User Updated", description: `User ${data.name} has been updated successfully.` });
     } else {
-      // Add new user
       const newUser: User = {
         ...data,
-        id: `usr${Math.floor(Math.random() * 1000) + 100}`, // Simple ID generation
+        officeName,
+        id: `usr${Math.floor(Math.random() * 1000) + 100}`,
       };
       setUsers([...users, newUser]);
       toast({ title: "User Added", description: `User ${data.name} has been added successfully.` });
@@ -72,7 +85,7 @@ export default function UsersPage() {
     if (userToDelete) {
       setUsers(users.filter(u => u.id !== userToDelete.id));
       toast({ title: "User Deleted", description: `User ${userToDelete.name} has been deleted.` });
-      setUserToDelete(null); // Close dialog by clearing userToDelete
+      setUserToDelete(null);
     }
   };
 
@@ -87,7 +100,7 @@ export default function UsersPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="font-headline text-xl">System Users</CardTitle>
-            <CardDescription>List of all registered users and their roles.</CardDescription>
+            <CardDescription>List of all registered users, their roles, and assigned offices.</CardDescription>
           </div>
           <Button onClick={() => handleOpenUserForm()}>
             <PlusCircleIcon className="mr-2 h-4 w-4" /> Add New User
@@ -101,6 +114,7 @@ export default function UsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Assigned Office</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -116,6 +130,7 @@ export default function UsersPage() {
                       {user.role}
                     </Badge>
                   </TableCell>
+                  <TableCell>{user.officeName || 'N/A'}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 text-xs rounded-full ${user.status === 'Active' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>
                       {user.status}
@@ -125,7 +140,6 @@ export default function UsersPage() {
                     <Button variant="outline" size="sm" onClick={() => handleOpenUserForm(user)}>
                       <EditIcon className="h-4 w-4" />
                     </Button>
-                    {/* Removed AlertDialogTrigger wrapper */}
                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(user)}>
                       <Trash2Icon className="h-4 w-4" />
                     </Button>
@@ -140,7 +154,6 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* User Form Dialog */}
       <Dialog open={isUserFormOpen} onOpenChange={(isOpen) => { if (!isOpen) handleCloseUserForm(); else setIsUserFormOpen(true); }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -153,11 +166,11 @@ export default function UsersPage() {
             onSubmit={handleSaveUser} 
             initialData={editingUser} 
             onCancel={handleCloseUserForm}
+            availableOffices={availableOffices}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!userToDelete} onOpenChange={(isOpen) => {if(!isOpen) setUserToDelete(null)}}>
         <AlertDialogContent>
           <AlertDialogHeader>
