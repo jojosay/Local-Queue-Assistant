@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { User } from '@/app/admin/users/page'; // Import the User interface
+import type { User } from '@/app/admin/users/page';
 
 const registerFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -21,7 +21,7 @@ const registerFormSchema = z.object({
   confirmPassword: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ['confirmPassword'], // path to show error under
+  path: ['confirmPassword'],
 });
 
 type RegisterFormValues = z.infer<typeof registerFormSchema>;
@@ -41,16 +41,14 @@ export function RegisterForm() {
     },
   });
 
-  // Mock registration function
   async function onSubmit(values: RegisterFormValues) {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 100)); // Simulate API delay
 
-    // Save the new user to localStorage
     try {
-      const storedUsersRaw = localStorage.getItem('appUsers');
       let users: User[] = [];
+      const storedUsersRaw = localStorage.getItem('appUsers');
+      console.log('REGISTER FORM: Raw from localStorage appUsers:', storedUsersRaw);
 
       if (storedUsersRaw) {
         try {
@@ -58,17 +56,16 @@ export function RegisterForm() {
           if (Array.isArray(parsedUsers)) {
             users = parsedUsers;
           } else {
-            console.warn("'appUsers' in localStorage was not an array. Resetting to empty array for registration.");
-            users = [];
+            console.warn("'appUsers' in localStorage was not an array. Starting new list for registration.");
+            // `users` remains `[]` as initialized
           }
         } catch (parseError) {
-          console.error("Failed to parse 'appUsers' from localStorage in RegisterForm. Resetting. Error:", parseError);
-          users = [];
-          localStorage.removeItem('appUsers'); // Clear corrupted data
+          console.error("Failed to parse 'appUsers' from localStorage. Starting new list for registration. Error:", parseError);
+          // `users` remains `[]` as initialized
         }
       }
+      // At this point, `users` is guaranteed to be a User[] (possibly empty)
 
-      // Check if email already exists
       if (users.some(user => user.email === values.email)) {
         toast({
           variant: 'destructive',
@@ -83,13 +80,12 @@ export function RegisterForm() {
         id: `usr${Date.now()}${Math.floor(Math.random() * 100)}`,
         name: values.name,
         email: values.email,
-        // Do NOT store password in localStorage directly in a real app
-        role: 'Staff', // Default role for new registrations
-        status: 'Active', // Default status
-        // officeId and officeName will be undefined by default
+        role: 'Staff', 
+        status: 'Active', 
       };
 
       users.push(newUser);
+      console.log('REGISTER FORM: Attempting to save to localStorage appUsers:', JSON.stringify(users));
       localStorage.setItem('appUsers', JSON.stringify(users));
 
       toast({
@@ -99,7 +95,7 @@ export function RegisterForm() {
       router.push('/login');
 
     } catch (error) {
-      console.error("Failed to save user to localStorage during registration:", error);
+      console.error("Error during user registration or saving to localStorage:", error);
       toast({
         variant: 'destructive',
         title: 'Registration Error',

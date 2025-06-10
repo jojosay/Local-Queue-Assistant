@@ -35,25 +35,28 @@ export default function UsersPage() {
 
   useEffect(() => {
     // Load users from localStorage
+    let loadedUsers: User[] = [];
     try {
       const storedUsersRaw = localStorage.getItem('appUsers');
+      console.log('USER MGMT PAGE: Raw from localStorage appUsers:', storedUsersRaw);
       if (storedUsersRaw) {
         const parsedUsers = JSON.parse(storedUsersRaw);
         if (Array.isArray(parsedUsers)) {
-          setUsers(parsedUsers);
+          loadedUsers = parsedUsers;
         } else {
-          console.warn("'appUsers' in localStorage was not an array. Initializing with empty array for UsersPage.");
-          setUsers([]);
-          localStorage.setItem('appUsers', JSON.stringify([])); // Correct it
+          console.warn("'appUsers' in localStorage was not an array. Resetting localStorage for 'appUsers'.");
+          localStorage.setItem('appUsers', JSON.stringify([])); // Reset if not an array
         }
       } else {
-        setUsers([]); // Initialize with empty if nothing stored
+        console.log("'appUsers' not found in localStorage. Initializing 'appUsers' in localStorage.");
+        localStorage.setItem('appUsers', JSON.stringify([])); // Initialize if not present
       }
     } catch (error) {
-      console.error("Failed to parse 'appUsers' from localStorage in UsersPage. Initializing with empty array. Error:", error);
-      setUsers([]);
-      localStorage.setItem('appUsers', JSON.stringify([])); // Optionally clear/reset corrupted data
+      console.error("Error processing 'appUsers' from localStorage. Resetting 'appUsers' in localStorage. Error:", error);
+      localStorage.setItem('appUsers', JSON.stringify([])); // Reset on any error
     }
+    console.log('USER MGMT PAGE: Setting users state to:', loadedUsers);
+    setUsers(loadedUsers);
 
     // Load offices from localStorage
     const storedOffices = localStorage.getItem('appOffices');
@@ -76,8 +79,13 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    // Persist users to localStorage
-    localStorage.setItem('appUsers', JSON.stringify(users));
+    // Persist users to localStorage whenever `users` state changes, but only if it's not the initial empty load.
+    // This check prevents overwriting localStorage with an empty array if the initial load was empty.
+    if (users.length > 0 || localStorage.getItem('appUsers') !== null) {
+        // Avoid logging sensitive data in production. For debugging only:
+        // console.log('USER MGMT PAGE: Persisting users to localStorage:', users);
+        localStorage.setItem('appUsers', JSON.stringify(users));
+    }
   }, [users]);
 
   const handleOpenUserForm = (user?: User) => {
@@ -105,9 +113,9 @@ export default function UsersPage() {
         status: data.status,
         officeId: data.officeId,
         officeName,
-        id: `usr${Date.now()}${Math.floor(Math.random() * 100)}`, // More unique ID
+        id: `usr${Date.now()}${Math.floor(Math.random() * 100)}`,
       };
-      setUsers([...users, newUser]);
+      setUsers(prevUsers => [...prevUsers, newUser]);
       toast({ title: "User Added", description: `User ${data.name} has been added successfully.` });
     }
     handleCloseUserForm();
