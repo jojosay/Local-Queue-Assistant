@@ -1,10 +1,10 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layouts/admin-layout';
 import { PageHeader } from '@/components/shared/page-header';
-import { UsersIcon, PlusCircleIcon, Trash2Icon, EditIcon, StarIcon } from 'lucide-react'; // Using UsersIcon as a stand-in for counters
+import { UsersIcon, PlusCircleIcon, Trash2Icon, EditIcon, StarIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,30 +13,41 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { CounterForm, type CounterFormValues } from '@/components/admin/counters/counter-form';
 import { useToast } from '@/hooks/use-toast';
+import type { Office } from '@/app/admin/offices/page'; // Import Office type
+import { initialMockOffices } from '@/app/admin/offices/page'; // Import mock offices
 
 export interface Counter {
   id: string;
   name: string;
-  office: string;
+  officeId: string; // Changed from office: string
+  officeName?: string; // For display purposes
   type: 'General' | 'Priority' | 'Specialized';
   priority: boolean;
   status: 'Open' | 'Closed';
 }
 
-// Initial mock data
+// Updated initial mock data
 const initialMockCounters: Counter[] = [
-  { id: 'ctr001', name: 'Counter 1', office: 'Main City Branch', type: 'General', priority: false, status: 'Open' },
-  { id: 'ctr002', name: 'Counter 2', office: 'Main City Branch', type: 'Priority', priority: true, status: 'Open' },
-  { id: 'ctr003', name: 'Counter 3', office: 'Main City Branch', type: 'Specialized', priority: false, status: 'Closed' },
-  { id: 'ctr004', name: 'Service Desk A', office: 'North Suburb Office', type: 'General', priority: false, status: 'Open' },
+  { id: 'ctr001', name: 'Counter 1', officeId: 'off001', officeName: 'Main City Branch', type: 'General', priority: false, status: 'Open' },
+  { id: 'ctr002', name: 'Counter 2', officeId: 'off001', officeName: 'Main City Branch', type: 'Priority', priority: true, status: 'Open' },
+  { id: 'ctr003', name: 'Counter 3', officeId: 'off002', officeName: 'North Suburb Office', type: 'Specialized', priority: false, status: 'Closed' },
 ];
 
 export default function CountersPage() {
   const [counters, setCounters] = useState<Counter[]>(initialMockCounters);
+  const [availableOffices, setAvailableOffices] = useState<Office[]>(initialMockOffices); // Manage available offices
   const [isCounterFormOpen, setIsCounterFormOpen] = useState(false);
   const [editingCounter, setEditingCounter] = useState<Counter | null>(null);
   const [counterToDelete, setCounterToDelete] = useState<Counter | null>(null);
   const { toast } = useToast();
+
+  // In a real app, availableOffices would likely be fetched or come from context
+  useEffect(() => {
+    // For now, we use the imported mock data.
+    // If offices page updates its state, this won't reflect here unless passed or globally managed.
+    setAvailableOffices(initialMockOffices);
+  }, []);
+
 
   const handleOpenCounterForm = (counter?: Counter) => {
     setEditingCounter(counter || null);
@@ -49,15 +60,17 @@ export default function CountersPage() {
   };
 
   const handleSaveCounter = (data: CounterFormValues) => {
+    const selectedOffice = availableOffices.find(o => o.id === data.officeId);
+    const officeName = selectedOffice ? selectedOffice.name : 'Unknown Office';
+
     if (editingCounter) {
-      // Edit existing counter
-      setCounters(counters.map(c => c.id === editingCounter.id ? { ...editingCounter, ...data } : c));
+      setCounters(counters.map(c => c.id === editingCounter.id ? { ...editingCounter, ...data, officeName } : c));
       toast({ title: "Counter Updated", description: `Counter ${data.name} has been updated successfully.` });
     } else {
-      // Add new counter
       const newCounter: Counter = {
         ...data,
-        id: `ctr${Math.floor(Math.random() * 1000) + 100}`, // Simple ID generation
+        officeName,
+        id: `ctr${Math.floor(Math.random() * 1000) + 100}`,
       };
       setCounters([...counters, newCounter]);
       toast({ title: "Counter Added", description: `Counter ${data.name} has been added successfully.` });
@@ -82,7 +95,7 @@ export default function CountersPage() {
       <PageHeader 
         title="Counter Management" 
         description="Configure and manage service counters for all offices."
-        icon={UsersIcon} // Still using UsersIcon as per original
+        icon={UsersIcon}
       />
        <Card className="shadow-lg animate-fade-in">
         <CardHeader className="flex flex-row items-center justify-between">
@@ -90,9 +103,12 @@ export default function CountersPage() {
             <CardTitle className="font-headline text-xl">Service Counters</CardTitle>
             <CardDescription>List of all counters and their configurations.</CardDescription>
           </div>
-          <Button onClick={() => handleOpenCounterForm()}>
+          <Button onClick={() => handleOpenCounterForm()} disabled={availableOffices.length === 0}>
             <PlusCircleIcon className="mr-2 h-4 w-4" /> Add New Counter
           </Button>
+           {availableOffices.length === 0 && (
+            <p className="text-sm text-destructive">Please add offices before adding counters.</p>
+          )}
         </CardHeader>
         <CardContent>
           <Table>
@@ -112,7 +128,7 @@ export default function CountersPage() {
                 <TableRow key={counter.id}>
                   <TableCell className="font-medium">{counter.id}</TableCell>
                   <TableCell>{counter.name}</TableCell>
-                  <TableCell>{counter.office}</TableCell>
+                  <TableCell>{counter.officeName || counter.officeId}</TableCell>
                   <TableCell><Badge variant={counter.type === 'Priority' ? 'default' : 'secondary'}>{counter.type}</Badge></TableCell>
                   <TableCell className="text-center">
                     {counter.priority ? <StarIcon className="h-5 w-5 text-yellow-500 fill-yellow-400 inline" /> : '-'}
@@ -123,7 +139,7 @@ export default function CountersPage() {
                     </span>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenCounterForm(counter)}>
+                    <Button variant="outline" size="sm" onClick={() => handleOpenCounterForm(counter)} disabled={availableOffices.length === 0}>
                       <EditIcon className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(counter)}>
@@ -140,7 +156,6 @@ export default function CountersPage() {
         </CardContent>
       </Card>
 
-      {/* Counter Form Dialog */}
       <Dialog open={isCounterFormOpen} onOpenChange={(isOpen) => { if (!isOpen) handleCloseCounterForm(); else setIsCounterFormOpen(true); }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -153,11 +168,11 @@ export default function CountersPage() {
             onSubmit={handleSaveCounter} 
             initialData={editingCounter} 
             onCancel={handleCloseCounterForm}
+            availableOffices={availableOffices}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!counterToDelete} onOpenChange={(isOpen) => {if(!isOpen) setCounterToDelete(null)}}>
         <AlertDialogContent>
           <AlertDialogHeader>

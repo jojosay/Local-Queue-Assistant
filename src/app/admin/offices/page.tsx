@@ -17,12 +17,12 @@ export interface Office {
   id: string;
   name: string;
   address: string;
-  counters: number; // For now, this will be a manually set number or a placeholder
+  counters: number; 
   status: 'Active' | 'Inactive';
 }
 
-// Initial mock data
-const initialMockOffices: Office[] = [
+// Export initial mock data for use in other components (e.g., CounterForm)
+export const initialMockOffices: Office[] = [
   { id: 'off001', name: 'Main City Branch', address: '123 Main St, Anytown', counters: 5, status: 'Active' },
   { id: 'off002', name: 'North Suburb Office', address: '456 North Rd, Suburbia', counters: 3, status: 'Active' },
   { id: 'off003', name: 'Westside Kiosk', address: '789 West Ave, Westville', counters: 1, status: 'Inactive' },
@@ -47,15 +47,13 @@ export default function OfficesPage() {
 
   const handleSaveOffice = (data: OfficeFormValues) => {
     if (editingOffice) {
-      // Edit existing office
-      setOffices(offices.map(o => o.id === editingOffice.id ? { ...editingOffice, ...data, counters: editingOffice.counters } : o)); // Keep existing counter count for now
+      setOffices(offices.map(o => o.id === editingOffice.id ? { ...editingOffice, ...data, counters: editingOffice.counters } : o));
       toast({ title: "Office Updated", description: `Office ${data.name} has been updated successfully.` });
     } else {
-      // Add new office
       const newOffice: Office = {
         ...data,
-        id: `off${Math.floor(Math.random() * 1000) + 100}`, // Simple ID generation
-        counters: 0, // Default counter count for new offices
+        id: `off${Math.floor(Math.random() * 1000) + 100}`,
+        counters: 0, 
       };
       setOffices([...offices, newOffice]);
       toast({ title: "Office Added", description: `Office ${data.name} has been added successfully.` });
@@ -134,7 +132,6 @@ export default function OfficesPage() {
         </CardContent>
       </Card>
 
-      {/* Office Form Dialog */}
       <Dialog open={isOfficeFormOpen} onOpenChange={(isOpen) => { if (!isOpen) handleCloseOfficeForm(); else setIsOfficeFormOpen(true); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -151,7 +148,6 @@ export default function OfficesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!officeToDelete} onOpenChange={(isOpen) => {if(!isOpen) setOfficeToDelete(null)}}>
         <AlertDialogContent>
           <AlertDialogHeader>

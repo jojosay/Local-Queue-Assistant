@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import type { Counter } from '@/app/admin/counters/page';
+import type { Office } from '@/app/admin/offices/page'; // Import Office type
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -15,7 +16,7 @@ import { useEffect } from 'react';
 
 const counterFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
-  office: z.string().min(2, { message: 'Office name must be at least 2 characters.'}),
+  officeId: z.string().min(1, { message: 'Please select an office.' }), // Changed from office
   type: z.enum(['General', 'Priority', 'Specialized'], { required_error: 'Counter type is required.' }),
   priority: z.boolean().default(false),
   status: z.enum(['Open', 'Closed'], { required_error: 'Status is required.' }),
@@ -27,14 +28,21 @@ interface CounterFormProps {
   onSubmit: (values: CounterFormValues) => void;
   initialData?: Counter | null;
   onCancel: () => void;
+  availableOffices: Office[]; // Add prop for available offices
 }
 
-export function CounterForm({ onSubmit, initialData, onCancel }: CounterFormProps) {
+export function CounterForm({ onSubmit, initialData, onCancel, availableOffices }: CounterFormProps) {
   const form = useForm<CounterFormValues>({
     resolver: zodResolver(counterFormSchema),
-    defaultValues: initialData || {
+    defaultValues: initialData ? {
+      name: initialData.name,
+      officeId: initialData.officeId,
+      type: initialData.type,
+      priority: initialData.priority,
+      status: initialData.status,
+    } : {
       name: '',
-      office: '',
+      officeId: availableOffices.length > 0 ? availableOffices[0].id : '', // Default to first office if available
       type: 'General',
       priority: false,
       status: 'Open',
@@ -43,17 +51,23 @@ export function CounterForm({ onSubmit, initialData, onCancel }: CounterFormProp
 
   useEffect(() => {
     if (initialData) {
-      form.reset(initialData);
+      form.reset({
+        name: initialData.name,
+        officeId: initialData.officeId,
+        type: initialData.type,
+        priority: initialData.priority,
+        status: initialData.status,
+      });
     } else {
       form.reset({
         name: '',
-        office: '',
+        officeId: availableOffices.length > 0 ? availableOffices[0].id : '',
         type: 'General',
         priority: false,
         status: 'Open',
       });
     }
-  }, [initialData, form]);
+  }, [initialData, form, availableOffices]);
 
   const handleSubmit = (values: CounterFormValues) => {
     onSubmit(values);
@@ -77,13 +91,27 @@ export function CounterForm({ onSubmit, initialData, onCancel }: CounterFormProp
         />
         <FormField
           control={form.control}
-          name="office"
+          name="officeId"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Office / Branch</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Main Branch, Downtown Office" {...field} />
-              </FormControl>
+              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an office" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {availableOffices.map((office) => (
+                    <SelectItem key={office.id} value={office.id}>
+                      {office.name}
+                    </SelectItem>
+                  ))}
+                   {availableOffices.length === 0 && (
+                    <SelectItem value="" disabled>No offices available. Please add an office first.</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -155,7 +183,7 @@ export function CounterForm({ onSubmit, initialData, onCancel }: CounterFormProp
               Cancel
             </Button>
           </DialogClose>
-          <Button type="submit">
+          <Button type="submit" disabled={availableOffices.length === 0 && !initialData}>
             {initialData ? 'Save Changes' : 'Create Counter'}
           </Button>
         </DialogFooter>
@@ -163,3 +191,4 @@ export function CounterForm({ onSubmit, initialData, onCancel }: CounterFormProp
     </Form>
   );
 }
+
