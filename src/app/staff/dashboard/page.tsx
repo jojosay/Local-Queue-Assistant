@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { StaffControls } from '@/components/staff/staff-controls';
 import { NowServingCard } from '@/components/staff/now-serving-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ListChecksIcon, UsersIcon, AlertTriangleIcon } from 'lucide-react';
+import { ListChecksIcon, UsersIcon, AlertTriangleIcon, TvIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -16,8 +16,9 @@ interface Ticket {
   id: string; // Add id for key prop
   number: string;
   service: string;
-  timeWaiting: string; 
+  timeWaiting: string;
   officeId?: string; // For filtering
+  timestamp: number; // Keep timestamp for sorting/logic
 }
 
 interface QueueItem {
@@ -26,6 +27,7 @@ interface QueueItem {
   service: string;
   priority?: boolean;
   officeId?: string; // For filtering
+  timestamp: number; // Keep timestamp for sorting/logic
 }
 
 export default function StaffDashboardPage() {
@@ -36,16 +38,14 @@ export default function StaffDashboardPage() {
   const [staffOfficeName, setStaffOfficeName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [nextTicketId, setNextTicketId] = useState(1); // For generating unique ticket IDs
 
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load context from localStorage
     const role = localStorage.getItem('mockUserRole');
     const officeId = localStorage.getItem('mockUserOfficeId');
     const officeName = localStorage.getItem('mockUserOfficeName');
-    
+
     setUserRole(role);
     setStaffOfficeId(officeId);
     setStaffOfficeName(officeName);
@@ -53,94 +53,132 @@ export default function StaffDashboardPage() {
     if (role === 'admin') {
       setCounterDetails("Admin View (All Offices)");
     } else if (officeName) {
-      setCounterDetails(officeName);
-    } else if (role === 'staff') {
+      setCounterDetails(officeName); // Use the specific office name
+    } else if (role === 'staff' && !officeId) {
       setCounterDetails("Unassigned Counter");
     } else {
-      setCounterDetails("General Staff View");
-    }
-    
-    // Load tickets from localStorage (simulating a shared queue)
-    const storedQueue = localStorage.getItem('appQueue');
-    if (storedQueue) {
-      const allTickets: QueueItem[] = JSON.parse(storedQueue);
-      if (role === 'admin') {
-        setQueue(allTickets);
-      } else if (officeId) {
-        setQueue(allTickets.filter(t => t.officeId === officeId || !t.officeId)); // Show office-specific and general tickets
-      } else {
-         setQueue(allTickets.filter(t => !t.officeId)); // Show only general tickets if staff not assigned
-      }
+      setCounterDetails("General Staff View"); // Fallback
     }
 
-    const storedCurrentTicket = localStorage.getItem('appCurrentTicket-' + (officeId || 'general'));
-    if(storedCurrentTicket) {
-        const parsedTicket = JSON.parse(storedCurrentTicket);
-        // Ensure current ticket matches staff's office or is general if staff unassigned
-        if ( (officeId && parsedTicket.officeId === officeId) || (!officeId && !parsedTicket.officeId) || role === 'admin'){
-            setCurrentTicket(parsedTicket);
+    let allTickets: QueueItem[] = [];
+    try {
+      const storedQueue = localStorage.getItem('appQueue');
+      if (storedQueue) {
+        const parsedQueue = JSON.parse(storedQueue);
+        if (Array.isArray(parsedQueue)) {
+          allTickets = parsedQueue;
+        } else {
+          localStorage.setItem('appQueue', JSON.stringify([]));
         }
+      } else {
+        localStorage.setItem('appQueue', JSON.stringify([]));
+      }
+    } catch (error) {
+        localStorage.setItem('appQueue', JSON.stringify([]));
     }
 
+
+    // Filter queue based on role and officeId
+    if (role === 'admin') {
+      setQueue(allTickets.sort((a,b) => a.timestamp - b.timestamp));
+    } else if (officeId) {
+      setQueue(allTickets.filter(t => t.officeId === officeId).sort((a,b) => a.timestamp - b.timestamp));
+    } else {
+      // Staff not assigned to an office, show tickets with no officeId (general queue)
+      setQueue(allTickets.filter(t => !t.officeId).sort((a,b) => a.timestamp - b.timestamp));
+    }
+
+    // Load current ticket for this staff member's context
+    const currentTicketKey = 'appCurrentTicket-' + (officeId || 'general');
+    try {
+      const storedCurrentTicket = localStorage.getItem(currentTicketKey);
+      if (storedCurrentTicket) {
+        const parsedTicket: Ticket = JSON.parse(storedCurrentTicket);
+         // Ensure current ticket matches staff's office context or is general if staff unassigned, or if admin
+        if ( (officeId && parsedTicket.officeId === officeId) ||
+             (!officeId && !parsedTicket.officeId && role !== 'admin') || // Staff unassigned, only general tickets
+             role === 'admin' // Admin can see any current ticket (though this state might be per-counter in reality)
+           ) {
+          setCurrentTicket(parsedTicket);
+        }
+      }
+    } catch (error) {
+        // console.error("Error loading current ticket:", error);
+    }
 
     setIsDataLoaded(true);
   }, []);
 
   useEffect(() => {
-    // Persist queue to localStorage
-    if(isDataLoaded) { // Only save after initial load
-      localStorage.setItem('appQueue', JSON.stringify(queue));
+    if (isDataLoaded) {
+      // Persist the *entire* queue back to localStorage, as staff actions modify it globally
+      // but filtering for display happens in the initial load useEffect.
+      const allTicketsFromStorageRaw = localStorage.getItem('appQueue');
+      let allTicketsFromStorage: QueueItem[] = [];
+      if(allTicketsFromStorageRaw){
+        try {
+          allTicketsFromStorage = JSON.parse(allTicketsFromStorageRaw);
+        } catch (e) { /* ignore parse error, will be overwritten */ }
+      }
+
+      // Create a map of the current filtered queue for quick lookup
+      const currentFilteredQueueMap = new Map(queue.map(item => [item.id, item]));
+
+      // Update or add items from the filtered queue back to the global list
+      // Remove items from global list that are no longer in filtered queue (e.g. called next)
+      const newGlobalQueue = allTicketsFromStorage
+        .filter(ticket => currentFilteredQueueMap.has(ticket.id) || ticket.officeId !== staffOfficeId ) // Keep tickets from other offices
+        .map(ticket => currentFilteredQueueMap.get(ticket.id) || ticket) // Update if present in current filtered queue
+        .concat(queue.filter(ticket => !allTicketsFromStorage.find(t => t.id === ticket.id))); // Add new tickets from filtered queue
+
+
+      // Remove duplicates that might arise from concat logic if not careful
+      const uniqueGlobalQueue = Array.from(new Map(newGlobalQueue.map(item => [item.id, item])).values());
+
+
+      localStorage.setItem('appQueue', JSON.stringify(uniqueGlobalQueue.sort((a,b) => a.timestamp - b.timestamp)));
     }
-  }, [queue, isDataLoaded]);
+  }, [queue, staffOfficeId, isDataLoaded]);
 
   useEffect(() => {
-    // Persist current ticket to localStorage, namespaced by officeId or 'general'
     if (isDataLoaded) {
-        const key = 'appCurrentTicket-' + (staffOfficeId || 'general');
-        if (currentTicket) {
-            localStorage.setItem(key, JSON.stringify(currentTicket));
-        } else {
-            localStorage.removeItem(key);
-        }
+      const key = 'appCurrentTicket-' + (staffOfficeId || 'general');
+      if (currentTicket) {
+        localStorage.setItem(key, JSON.stringify(currentTicket));
+      } else {
+        localStorage.removeItem(key);
+      }
     }
   }, [currentTicket, staffOfficeId, isDataLoaded]);
 
 
-  const calculateWaitingTime = () => {
-    const minutes = Math.floor(Math.random() * 15);
-    const seconds = Math.floor(Math.random() * 60);
-    return `${minutes}m ${seconds}s`;
+  const calculateWaitingTime = (timestamp: number) => {
+    const diffMs = Date.now() - timestamp;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffSecs = Math.floor((diffMs % 60000) / 1000);
+    return `${diffMins}m ${diffSecs}s`;
   };
 
   const handleCallNext = () => {
     if (queue.length === 0) {
-      toast({ title: 'Queue Empty', description: 'There are no customers waiting.', variant: 'destructive' });
+      toast({ title: 'Queue Empty', description: 'There are no customers waiting for this office.', variant: 'destructive' });
       setCurrentTicket(null);
       return;
     }
 
-    // Prioritize tickets for the current staff's office if they are assigned
-    // Or, if admin, or unassigned staff, pick any.
-    let nextCustomerIndex = -1;
-    if (userRole !== 'admin' && staffOfficeId) {
-      nextCustomerIndex = queue.findIndex(item => item.officeId === staffOfficeId);
-    }
-    if (nextCustomerIndex === -1) { // Fallback to any ticket if no office-specific or if admin/unassigned
-      nextCustomerIndex = 0;
-    }
-    
-    const nextCustomer = queue[nextCustomerIndex];
+    const nextCustomer = queue[0]; // Already sorted and filtered
 
     const newCurrentTicket: Ticket = {
       id: nextCustomer.id,
       number: nextCustomer.number,
       service: nextCustomer.service,
-      timeWaiting: calculateWaitingTime(),
+      timeWaiting: calculateWaitingTime(nextCustomer.timestamp),
       officeId: nextCustomer.officeId,
+      timestamp: nextCustomer.timestamp,
     };
 
     setCurrentTicket(newCurrentTicket);
-    setQueue(prevQueue => prevQueue.filter((_, index) => index !== nextCustomerIndex));
+    setQueue(prevQueue => prevQueue.filter(ticket => ticket.id !== nextCustomer.id));
     toast({ title: 'Called Next', description: `Now serving ticket ${newCurrentTicket.number}.` });
   };
 
@@ -159,13 +197,13 @@ export default function StaffDashboardPage() {
       toast({ title: 'No Active Ticket', description: 'There is no ticket to skip.', variant: 'destructive' });
       return;
     }
-    const skippedTicket = { ...currentTicket, id: `skipped-${currentTicket.id}-${Date.now()}` }; // Give it a new ID to avoid key conflicts if re-added
-    // Re-add to end of queue for simplicity, could be more complex (e.g. specific skipped queue)
-    // For now, it just clears it. If re-queuing is desired:
-    // setQueue(prevQueue => [...prevQueue, { number: skippedTicket.number, service: skippedTicket.service, officeId: skippedTicket.officeId, id: skippedTicket.id, priority: false }]);
-    toast({ title: 'Ticket Skipped', description: `Ticket ${skippedTicket.number} has been skipped.` });
+    const skippedTicketNumber = currentTicket.number;
+    // For simplicity, skipping just removes the current ticket.
+    // In a real app, it might go to a "skipped" list or back to the queue.
     setCurrentTicket(null);
+    toast({ title: 'Ticket Skipped', description: `Ticket ${skippedTicketNumber} has been skipped.` });
   };
+
 
   if (!isDataLoaded) {
     return (
@@ -178,10 +216,13 @@ export default function StaffDashboardPage() {
     );
   }
 
+  const displayLink = staffOfficeId ? `/display?officeId=${staffOfficeId}` : '/display';
+  const displayLinkText = staffOfficeName ? `View Display for ${staffOfficeName}` : "View Full Display";
+
   return (
     <StaffLayout>
-      <PageHeader 
-        title="Staff Dashboard" 
+      <PageHeader
+        title="Staff Dashboard"
         description={`Manage customer queues for ${staffOfficeName || (userRole === 'admin' ? 'all offices' : 'your assigned area')}.`}
         icon={UsersIcon}
       />
@@ -206,8 +247,8 @@ export default function StaffDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
         <div className="lg:col-span-2 space-y-6">
           <NowServingCard ticket={currentTicket} counterDetails={counterDetails} />
-          <StaffControls 
-            currentTicketNumber={currentTicket?.number} 
+          <StaffControls
+            currentTicketNumber={currentTicket?.number}
             counterDetails={counterDetails}
             onCallNext={handleCallNext}
             onComplete={handleCompleteTicket}
@@ -217,46 +258,69 @@ export default function StaffDashboardPage() {
           />
         </div>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ListChecksIcon className="h-6 w-6 text-primary" />
-                <CardTitle className="font-headline text-xl">Upcoming Queue</CardTitle>
-              </div>
-              {userRole === 'admin' && (
-                 <Button variant="outline" size="sm" asChild>
-                    <Link href="/kiosk" target="_blank">Add Test Ticket</Link>
-                 </Button>
-              )}
-            </div>
-             <CardDescription>
-                {staffOfficeId ? `Showing tickets for ${staffOfficeName}.` : (userRole === 'admin' ? 'Showing all tickets.' : 'Showing general tickets.')}
-             </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {queue.length > 0 ? (
-              <ul className="space-y-3 max-h-96 overflow-y-auto">
-                {queue.map((ticketItem) => (
-                  <li key={ticketItem.id} className={`p-3 rounded-md ${ticketItem.priority ? 'bg-accent/20 border-accent border' : 'bg-secondary'}`}>
-                    <div className="flex justify-between items-center">
-                      <span className={`font-semibold ${ticketItem.priority ? 'text-accent-foreground dark:text-yellow-400' : 'text-foreground'}`}>{ticketItem.number}</span>
-                      <span className="text-sm text-muted-foreground">{ticketItem.service}</span>
-                    </div>
-                    {userRole === 'admin' && ticketItem.officeId && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                            Office ID: {ticketItem.officeId}
+        <div className="space-y-6">
+            <Card className="shadow-lg">
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <ListChecksIcon className="h-6 w-6 text-primary" />
+                    <CardTitle className="font-headline text-xl">Upcoming Queue</CardTitle>
+                </div>
+                 {(userRole === 'admin' || staffOfficeId) && ( // Allow adding test ticket if admin or assigned to an office
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={`/kiosk${staffOfficeId ? `?officeId=${staffOfficeId}` : ''}`} target="_blank">Add Test Ticket</Link>
+                    </Button>
+                )}
+                </div>
+                <CardDescription>
+                    {staffOfficeId ? `Showing tickets for ${staffOfficeName}.` : (userRole === 'admin' ? 'Showing all tickets.' : 'Showing general tickets.')}
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {queue.length > 0 ? (
+                <ul className="space-y-3 max-h-96 overflow-y-auto">
+                    {queue.map((ticketItem) => (
+                    <li key={ticketItem.id} className={`p-3 rounded-md ${ticketItem.priority ? 'bg-accent/20 border-accent border' : 'bg-secondary'}`}>
+                        <div className="flex justify-between items-center">
+                        <span className={`font-semibold ${ticketItem.priority ? 'text-accent-foreground dark:text-yellow-400' : 'text-foreground'}`}>{ticketItem.number}</span>
+                        <span className="text-sm text-muted-foreground">{ticketItem.service}</span>
                         </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted-foreground text-center py-4">The queue is currently empty.</p>
-            )}
-          </CardContent>
-        </Card>
+                        {userRole === 'admin' && ticketItem.officeId && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                                Office: {ticketItem.officeId}
+                            </div>
+                        )}
+                    </li>
+                    ))}
+                </ul>
+                ) : (
+                <p className="text-muted-foreground text-center py-4">The queue is currently empty.</p>
+                )}
+            </CardContent>
+            </Card>
+
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <TvIcon className="h-6 w-6 text-primary"/>
+                        <CardTitle className="font-headline text-xl">Live Display</CardTitle>
+                    </div>
+                    <CardDescription>View the public queue display screen.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button asChild className="w-full">
+                        <Link href={displayLink} target="_blank" rel="noopener noreferrer">
+                            {displayLinkText}
+                        </Link>
+                    </Button>
+                </CardContent>
+            </Card>
+        </div>
+
+
       </div>
     </StaffLayout>
   );
 }
+
+    

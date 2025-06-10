@@ -4,7 +4,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -12,46 +13,59 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle } from 'lucide-react';
-import type { Office } from '@/app/admin/offices/page'; 
+import type { Office } from '@/app/admin/offices/page';
 
 interface TicketGenerationFormProps {
-  offices: Office[]; 
+  offices: Office[];
 }
 
-// Define QueueItem structure, as tickets will be added to a shared queue
 interface QueueItem {
   id: string;
   number: string;
-  service: string; // Could be office name or a specific service type later
+  service: string;
   officeId: string;
   priority?: boolean;
   timestamp: number;
 }
 
-
 const ticketFormSchema = z.object({
   officeId: z.string().min(1, { message: 'Please select an office.' }),
-  // Add other fields like service type if needed in the future
 });
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
 
-export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
+function TicketGenerationFormComponent({ offices }: TicketGenerationFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [generatedTicket, setGeneratedTicket] = useState<QueueItem | null>(null);
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [nextTicketNumber, setNextTicketNumber] = useState(100);
 
+  const searchParams = useSearchParams();
+  const preselectedOfficeId = searchParams.get('officeId');
+
+  const form = useForm<TicketFormValues>({
+    resolver: zodResolver(ticketFormSchema),
+    defaultValues: {
+      officeId: preselectedOfficeId && offices.some(o => o.id === preselectedOfficeId) ? preselectedOfficeId : '',
+    },
+  });
+
+  useEffect(() => {
+    // If preselectedOfficeId is valid and different from current form value, update it
+    if (preselectedOfficeId && offices.some(o => o.id === preselectedOfficeId) && form.getValues('officeId') !== preselectedOfficeId) {
+      form.setValue('officeId', preselectedOfficeId);
+    }
+  }, [preselectedOfficeId, offices, form]);
+
 
   useEffect(() => {
     const updateCurrentTime = () => {
       setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     };
-    updateCurrentTime(); 
-    const timer = setInterval(updateCurrentTime, 1000); 
-    
-    // Load next ticket number from local storage to maintain sequence across sessions
+    updateCurrentTime();
+    const timer = setInterval(updateCurrentTime, 1000);
+
     const storedTicketNum = localStorage.getItem('nextTicketNumber');
     if (storedTicketNum) {
       setNextTicketNumber(parseInt(storedTicketNum, 10));
@@ -64,18 +78,10 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
     localStorage.setItem('nextTicketNumber', nextTicketNumber.toString());
   }, [nextTicketNumber]);
 
-
-  const form = useForm<TicketFormValues>({
-    resolver: zodResolver(ticketFormSchema),
-    defaultValues: {
-      officeId: '',
-    },
-  });
-
   async function onSubmit(values: TicketFormValues) {
     setIsLoading(true);
     setGeneratedTicket(null);
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     const selectedOffice = offices.find(o => o.id === values.officeId);
     if (!selectedOffice) {
@@ -87,29 +93,36 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
     const prefix = selectedOffice.name.substring(0, 1).toUpperCase();
     const ticketNumberStr = `${prefix}-${nextTicketNumber}`;
     setNextTicketNumber(prev => prev + 1);
-    
+
     const newTicket: QueueItem = {
       id: `tkt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       number: ticketNumberStr,
-      service: selectedOffice.name, // Using office name as service for now
+      service: selectedOffice.name,
       officeId: selectedOffice.id,
-      priority: false, // Default to non-priority
+      priority: false,
       timestamp: Date.now(),
     };
 
-    // Add to a shared queue in localStorage
-    const storedQueue = localStorage.getItem('appQueue');
-    const queue: QueueItem[] = storedQueue ? JSON.parse(storedQueue) : [];
+    let queue: QueueItem[] = [];
+    try {
+        const storedQueue = localStorage.getItem('appQueue');
+        if (storedQueue) {
+            const parsedQueue = JSON.parse(storedQueue);
+            if(Array.isArray(parsedQueue)) queue = parsedQueue;
+        }
+    } catch (e) { /* ignore */ }
+    
     queue.push(newTicket);
     localStorage.setItem('appQueue', JSON.stringify(queue));
-    
+
     setGeneratedTicket(newTicket);
     setIsLoading(false);
     toast({
       title: 'Ticket Generated!',
       description: `Your ticket number is ${newTicket.number}. Please note it down.`,
     });
-    form.reset(); 
+    // Do not reset officeId if it was preselected via URL
+    form.reset({ officeId: preselectedOfficeId && offices.some(o => o.id === preselectedOfficeId) ? preselectedOfficeId : '' });
   }
 
   if (generatedTicket) {
@@ -140,7 +153,11 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Select Office / Service Location</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value || ""} // Ensure value is not undefined for Select
+                disabled={!!(preselectedOfficeId && offices.some(o => o.id === preselectedOfficeId))} // Disable if preselected
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose an office" />
@@ -166,3 +183,15 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
     </Form>
   );
 }
+
+
+export function TicketGenerationForm(props: TicketGenerationFormProps) {
+  return (
+    // Wrap with Suspense because useSearchParams() needs it for SSR components or during initial client render.
+    <Suspense fallback={<div>Loading form...</div>}>
+      <TicketGenerationFormComponent {...props} />
+    </Suspense>
+  );
+}
+
+    
