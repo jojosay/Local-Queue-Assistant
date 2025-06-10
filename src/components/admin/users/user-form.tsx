@@ -4,8 +4,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import type { User } from '@/app/admin/users/page'; // Import User type
-import type { Office } from '@/app/admin/offices/page'; // Import Office type
+import type { User } from '@/app/admin/users/page';
+import type { Office } from '@/app/admin/offices/page';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -13,18 +13,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useEffect } from 'react';
 
+const UNASSIGNED_OFFICE_VALUE = "__UNASSIGNED__";
+const NO_OFFICES_DUMMY_VALUE = "__NO_OFFICES_DUMMY__";
+
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   role: z.enum(['Admin', 'Staff'], { required_error: 'Role is required.' }),
   status: z.enum(['Active', 'Inactive'], { required_error: 'Status is required.' }),
-  officeId: z.string().optional(), // Office assignment is optional
+  officeId: z.string(), // Internally, officeId will be a string (actual ID or UNASSIGNED_OFFICE_VALUE)
 });
 
 export type UserFormValues = z.infer<typeof userFormSchema>;
 
+// This is the type the parent component (UsersPage) expects for submission
+export type UserSubmitValues = Omit<UserFormValues, 'officeId'> & {
+  officeId?: string;
+};
+
 interface UserFormProps {
-  onSubmit: (values: UserFormValues) => void;
+  onSubmit: (values: UserSubmitValues) => void;
   initialData?: User | null;
   onCancel: () => void;
   availableOffices: Office[];
@@ -38,13 +46,13 @@ export function UserForm({ onSubmit, initialData, onCancel, availableOffices }: 
       email: initialData.email,
       role: initialData.role,
       status: initialData.status,
-      officeId: initialData.officeId || '',
+      officeId: initialData.officeId || UNASSIGNED_OFFICE_VALUE,
     } : {
       name: '',
       email: '',
       role: 'Staff',
       status: 'Active',
-      officeId: '',
+      officeId: UNASSIGNED_OFFICE_VALUE,
     },
   });
 
@@ -55,7 +63,7 @@ export function UserForm({ onSubmit, initialData, onCancel, availableOffices }: 
         email: initialData.email,
         role: initialData.role,
         status: initialData.status,
-        officeId: initialData.officeId || '',
+        officeId: initialData.officeId || UNASSIGNED_OFFICE_VALUE,
       });
     } else {
       form.reset({
@@ -63,16 +71,15 @@ export function UserForm({ onSubmit, initialData, onCancel, availableOffices }: 
         email: '',
         role: 'Staff',
         status: 'Active',
-        officeId: '',
+        officeId: UNASSIGNED_OFFICE_VALUE,
       });
     }
   }, [initialData, form]);
 
   const handleSubmit = (values: UserFormValues) => {
-    // Ensure officeId is undefined if no office is selected (empty string from select)
-    const submissionValues = {
+    const submissionValues: UserSubmitValues = {
       ...values,
-      officeId: values.officeId === '' ? undefined : values.officeId,
+      officeId: values.officeId === UNASSIGNED_OFFICE_VALUE ? undefined : values.officeId,
     };
     onSubmit(submissionValues);
   };
@@ -133,21 +140,21 @@ export function UserForm({ onSubmit, initialData, onCancel, availableOffices }: 
           render={({ field }) => (
             <FormItem>
               <FormLabel>Assigned Office (Optional)</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value || ''} defaultValue={field.value || ''}>
+              <Select onValueChange={field.onChange} value={field.value} >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select an office" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="">Unassigned / N/A</SelectItem>
+                  <SelectItem value={UNASSIGNED_OFFICE_VALUE}>Unassigned / N/A</SelectItem>
                   {availableOffices.map((office) => (
                     <SelectItem key={office.id} value={office.id}>
                       {office.name}
                     </SelectItem>
                   ))}
                    {availableOffices.length === 0 && (
-                    <SelectItem value="" disabled>No offices available to assign.</SelectItem>
+                    <SelectItem value={NO_OFFICES_DUMMY_VALUE} disabled>No offices available to assign.</SelectItem>
                   )}
                 </SelectContent>
               </Select>

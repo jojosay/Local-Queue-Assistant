@@ -11,10 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { UserForm, type UserFormValues } from '@/components/admin/users/user-form';
+import { UserForm, type UserSubmitValues } from '@/components/admin/users/user-form';
 import { useToast } from '@/hooks/use-toast';
-import type { Office } from '@/app/admin/offices/page'; // Import Office type
-import { initialMockOffices } from '@/app/admin/offices/page'; // Import mock offices
+import type { Office } from '@/app/admin/offices/page';
+import { initialMockOffices } from '@/app/admin/offices/page';
 
 export interface User {
   id: string;
@@ -26,9 +26,8 @@ export interface User {
   officeName?: string;
 }
 
-// Initial mock data
 const initialMockUsers: User[] = [
-  { id: 'usr001', name: 'Alice Smith', email: 'alice@example.com', role: 'Admin', status: 'Active' }, // Admin might not have an office
+  { id: 'usr001', name: 'Alice Smith', email: 'alice@example.com', role: 'Admin', status: 'Active' },
   { id: 'usr002', name: 'Bob Johnson', email: 'bob@example.com', role: 'Staff', status: 'Active', officeId: 'off001', officeName: 'Main City Branch' },
   { id: 'usr003', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Staff', status: 'Inactive', officeId: 'off002', officeName: 'North Suburb Office' },
   { id: 'usr004', name: 'Diana Prince', email: 'diana@example.com', role: 'Staff', status: 'Active', officeId: 'off001', officeName: 'Main City Branch' },
@@ -42,10 +41,8 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { toast } = useToast();
 
-  // In a real app, availableOffices would likely be fetched or come from context
   useEffect(() => {
-    // For now, we use the imported mock data.
-    setAvailableOffices(initialMockOffices);
+    setAvailableOffices(initialMockOffices.filter(o => o.status === 'Active'));
   }, []);
 
   const handleOpenUserForm = (user?: User) => {
@@ -58,16 +55,20 @@ export default function UsersPage() {
     setEditingUser(null);
   };
 
-  const handleSaveUser = (data: UserFormValues) => {
+  const handleSaveUser = (data: UserSubmitValues) => {
     const selectedOffice = availableOffices.find(o => o.id === data.officeId);
-    const officeName = selectedOffice ? selectedOffice.name : undefined;
+    const officeName = data.officeId && selectedOffice ? selectedOffice.name : undefined;
 
     if (editingUser) {
-      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, officeName } : u));
+      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, officeName, officeId: data.officeId } : u));
       toast({ title: "User Updated", description: `User ${data.name} has been updated successfully.` });
     } else {
       const newUser: User = {
-        ...data,
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        status: data.status,
+        officeId: data.officeId,
         officeName,
         id: `usr${Math.floor(Math.random() * 1000) + 100}`,
       };
