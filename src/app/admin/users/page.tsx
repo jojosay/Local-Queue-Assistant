@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // Removed AlertDialogTrigger from here as it's not used at the top level
 import { UserForm, type UserFormValues } from '@/components/admin/users/user-form';
 import { useToast } from '@/hooks/use-toast';
 
@@ -125,11 +125,10 @@ export default function UsersPage() {
                     <Button variant="outline" size="sm" onClick={() => handleOpenUserForm(user)}>
                       <EditIcon className="h-4 w-4" />
                     </Button>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(user)}>
-                        <Trash2Icon className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
+                    {/* Removed AlertDialogTrigger wrapper */}
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(user)}>
+                      <Trash2Icon className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
