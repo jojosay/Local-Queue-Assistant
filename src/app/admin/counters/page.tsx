@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { CounterForm, type CounterFormValues } from '@/components/admin/counters/counter-form';
 import { useToast } from '@/hooks/use-toast';
-import type { Office } from '@/app/admin/offices/page'; // Use the Office interface
+import type { Office } from '@/app/admin/offices/page';
 
 export interface Counter {
   id: string;
@@ -25,48 +25,73 @@ export interface Counter {
   status: 'Open' | 'Closed';
 }
 
-// Removed initialMockCounters
-// export const initialMockCounters: Counter[] = [ ... ];
-
 export default function CountersPage() {
-  const [counters, setCounters] = useState<Counter[]>([]); // Initialize with empty array
+  const [counters, setCounters] = useState<Counter[]>([]);
   const [availableOffices, setAvailableOffices] = useState<Office[]>([]);
   const [isCounterFormOpen, setIsCounterFormOpen] = useState(false);
   const [editingCounter, setEditingCounter] = useState<Counter | null>(null);
   const [counterToDelete, setCounterToDelete] = useState<Counter | null>(null);
   const { toast } = useToast();
+  const [isLoaded, setIsLoaded] = useState(false); // Flag to track initial load
 
   useEffect(() => {
-    // Load counters from localStorage
-    const storedCounters = localStorage.getItem('appCounters');
-    if (storedCounters) {
-      setCounters(JSON.parse(storedCounters));
+    let loadedCounters: Counter[] = [];
+    try {
+      const storedCountersRaw = localStorage.getItem('appCounters');
+      if (storedCountersRaw) {
+        const parsedCounters = JSON.parse(storedCountersRaw);
+        if (Array.isArray(parsedCounters)) {
+          loadedCounters = parsedCounters;
+        } else {
+          localStorage.setItem('appCounters', JSON.stringify([]));
+        }
+      } else {
+        localStorage.setItem('appCounters', JSON.stringify([]));
+      }
+    } catch (error) {
+      localStorage.setItem('appCounters', JSON.stringify([]));
     }
+    setCounters(loadedCounters);
+
     // Load offices from localStorage
-    const storedOffices = localStorage.getItem('appOffices');
-    if (storedOffices) {
-      const allOffices: Office[] = JSON.parse(storedOffices);
-      setAvailableOffices(allOffices.filter(o => o.status === 'Active'));
-    } else {
-      setAvailableOffices([]);
+    let activeOffices: Office[] = [];
+    try {
+      const storedOfficesRaw = localStorage.getItem('appOffices');
+      if (storedOfficesRaw) {
+        const allOffices: Office[] = JSON.parse(storedOfficesRaw);
+        if (Array.isArray(allOffices)) {
+          activeOffices = allOffices.filter(o => o.status === 'Active');
+        }
+      }
+    } catch (error) {
+      console.error("Error loading offices for counters page:", error);
     }
+    setAvailableOffices(activeOffices);
+    setIsLoaded(true); // Mark initial load as complete
   }, []);
 
   useEffect(() => {
-    // Persist counters to localStorage
-    localStorage.setItem('appCounters', JSON.stringify(counters));
-     // Update counter count in offices
-     const storedOffices = localStorage.getItem('appOffices');
-     if (storedOffices) {
-       let offices: Office[] = JSON.parse(storedOffices);
-       offices = offices.map(office => ({
-         ...office,
-         counters: counters.filter(c => c.officeId === office.id).length
-       }));
-       localStorage.setItem('appOffices', JSON.stringify(offices));
-     }
+    if (isLoaded) { // Only persist after initial load
+      localStorage.setItem('appCounters', JSON.stringify(counters));
 
-  }, [counters]);
+      // Update counter count in offices
+      const storedOfficesRaw = localStorage.getItem('appOffices');
+      if (storedOfficesRaw) {
+        try {
+          let offices: Office[] = JSON.parse(storedOfficesRaw);
+          if (Array.isArray(offices)) {
+            offices = offices.map(office => ({
+              ...office,
+              counters: counters.filter(c => c.officeId === office.id).length
+            }));
+            localStorage.setItem('appOffices', JSON.stringify(offices));
+          }
+        } catch (error) {
+            console.error("Error updating office counter counts:", error);
+        }
+      }
+    }
+  }, [counters, isLoaded]);
 
 
   const handleOpenCounterForm = (counter?: Counter) => {
@@ -90,9 +115,9 @@ export default function CountersPage() {
       const newCounter: Counter = {
         ...data,
         officeName,
-        id: `ctr${Date.now()}${Math.floor(Math.random() * 100)}`, // More unique ID
+        id: `ctr${Date.now()}${Math.floor(Math.random() * 100)}`,
       };
-      setCounters([...counters, newCounter]);
+      setCounters(prevCounters => [...prevCounters, newCounter]);
       toast({ title: "Counter Added", description: `Counter ${data.name} has been added successfully.` });
     }
     handleCloseCounterForm();
@@ -112,8 +137,8 @@ export default function CountersPage() {
 
   return (
     <AdminLayout>
-      <PageHeader 
-        title="Counter Management" 
+      <PageHeader
+        title="Counter Management"
         description="Configure and manage service counters for all offices."
         icon={UsersIcon}
       />
@@ -170,7 +195,10 @@ export default function CountersPage() {
               ))}
             </TableBody>
           </Table>
-           {counters.length === 0 && (
+           {!isLoaded && counters.length === 0 && (
+             <p className="text-center text-muted-foreground py-8">Loading counters...</p>
+           )}
+           {isLoaded && counters.length === 0 && (
             <p className="text-center text-muted-foreground py-8">No counters found. Click "Add New Counter" to get started.</p>
           )}
         </CardContent>
@@ -184,9 +212,9 @@ export default function CountersPage() {
               {editingCounter ? 'Update the details for this counter.' : 'Fill in the details for the new counter.'}
             </DialogDescription>
           </DialogHeader>
-          <CounterForm 
-            onSubmit={handleSaveCounter} 
-            initialData={editingCounter} 
+          <CounterForm
+            onSubmit={handleSaveCounter}
+            initialData={editingCounter}
             onCancel={handleCloseCounterForm}
             availableOffices={availableOffices}
           />
@@ -210,7 +238,8 @@ export default function CountersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
     </AdminLayout>
   );
 }
+

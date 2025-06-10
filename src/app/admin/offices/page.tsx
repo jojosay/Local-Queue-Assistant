@@ -17,31 +17,52 @@ export interface Office {
   id: string;
   name: string;
   address: string;
-  counters: number; 
+  counters: number;
   status: 'Active' | 'Inactive';
 }
 
-// Removed initialMockOffices
-// export const initialMockOffices: Office[] = [ ... ];
+// Minimal interface for Counter needed for cascading delete logic
+interface Counter {
+  id: string;
+  officeId: string;
+  // other counter properties aren't strictly needed here but might exist
+}
+
 
 export default function OfficesPage() {
-  const [offices, setOffices] = useState<Office[]>([]); // Initialize with empty array
+  const [offices, setOffices] = useState<Office[]>([]);
   const [isOfficeFormOpen, setIsOfficeFormOpen] = useState(false);
   const [editingOffice, setEditingOffice] = useState<Office | null>(null);
   const [officeToDelete, setOfficeToDelete] = useState<Office | null>(null);
   const { toast } = useToast();
+  const [isLoaded, setIsLoaded] = useState(false); // Flag to track initial load
 
-  // Persist and load offices from localStorage
   useEffect(() => {
-    const storedOffices = localStorage.getItem('appOffices');
-    if (storedOffices) {
-      setOffices(JSON.parse(storedOffices));
+    let loadedOffices: Office[] = [];
+    try {
+      const storedOfficesRaw = localStorage.getItem('appOffices');
+      if (storedOfficesRaw) {
+        const parsedOffices = JSON.parse(storedOfficesRaw);
+        if (Array.isArray(parsedOffices)) {
+          loadedOffices = parsedOffices;
+        } else {
+          localStorage.setItem('appOffices', JSON.stringify([]));
+        }
+      } else {
+        localStorage.setItem('appOffices', JSON.stringify([]));
+      }
+    } catch (error) {
+      localStorage.setItem('appOffices', JSON.stringify([]));
     }
+    setOffices(loadedOffices);
+    setIsLoaded(true); // Mark initial load as complete
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('appOffices', JSON.stringify(offices));
-  }, [offices]);
+    if (isLoaded) { // Only persist after initial load
+      localStorage.setItem('appOffices', JSON.stringify(offices));
+    }
+  }, [offices, isLoaded]);
 
 
   const handleOpenOfficeForm = (office?: Office) => {
@@ -61,10 +82,10 @@ export default function OfficesPage() {
     } else {
       const newOffice: Office = {
         ...data,
-        id: `off${Date.now()}${Math.floor(Math.random() * 100)}`, // More unique ID
-        counters: 0, 
+        id: `off${Date.now()}${Math.floor(Math.random() * 100)}`,
+        counters: 0,
       };
-      setOffices([...offices, newOffice]);
+      setOffices(prevOffices => [...prevOffices, newOffice]);
       toast({ title: "Office Added", description: `Office ${data.name} has been added successfully.` });
     }
     handleCloseOfficeForm();
@@ -78,11 +99,17 @@ export default function OfficesPage() {
     if (officeToDelete) {
       setOffices(offices.filter(o => o.id !== officeToDelete.id));
       // Also remove counters associated with this office
-      const storedCounters = localStorage.getItem('appCounters');
-      if (storedCounters) {
-        const counters: Counter[] = JSON.parse(storedCounters);
-        const updatedCounters = counters.filter(c => c.officeId !== officeToDelete.id);
-        localStorage.setItem('appCounters', JSON.stringify(updatedCounters));
+      const storedCountersRaw = localStorage.getItem('appCounters');
+      if (storedCountersRaw) {
+        try {
+            const counters: Counter[] = JSON.parse(storedCountersRaw);
+            if (Array.isArray(counters)) {
+                const updatedCounters = counters.filter(c => c.officeId !== officeToDelete.id);
+                localStorage.setItem('appCounters', JSON.stringify(updatedCounters));
+            }
+        } catch (error) {
+            console.error("Error processing 'appCounters' for deletion:", error);
+        }
       }
       toast({ title: "Office Deleted", description: `Office ${officeToDelete.name} has been deleted.` });
       setOfficeToDelete(null);
@@ -91,8 +118,8 @@ export default function OfficesPage() {
 
   return (
     <AdminLayout>
-      <PageHeader 
-        title="Office Management" 
+      <PageHeader
+        title="Office Management"
         description="View, add, and manage office locations."
         icon={BuildingIcon}
       />
@@ -142,7 +169,10 @@ export default function OfficesPage() {
               ))}
             </TableBody>
           </Table>
-           {offices.length === 0 && (
+           {!isLoaded && offices.length === 0 && (
+             <p className="text-center text-muted-foreground py-8">Loading offices...</p>
+           )}
+           {isLoaded && offices.length === 0 && (
             <p className="text-center text-muted-foreground py-8">No offices found. Click "Add New Office" to get started.</p>
           )}
         </CardContent>
@@ -156,9 +186,9 @@ export default function OfficesPage() {
               {editingOffice ? 'Update the details for this office.' : 'Fill in the details for the new office.'}
             </DialogDescription>
           </DialogHeader>
-          <OfficeForm 
-            onSubmit={handleSaveOffice} 
-            initialData={editingOffice} 
+          <OfficeForm
+            onSubmit={handleSaveOffice}
+            initialData={editingOffice}
             onCancel={handleCloseOfficeForm}
           />
         </DialogContent>
@@ -181,18 +211,7 @@ export default function OfficesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
     </AdminLayout>
   );
-}
-
-// Minimal interface for Counter needed for cascading delete
-interface Counter {
-  id: string;
-  name: string;
-  officeId: string;
-  officeName?: string;
-  type: 'General' | 'Priority' | 'Specialized';
-  priority: boolean;
-  status: 'Open' | 'Closed';
 }
