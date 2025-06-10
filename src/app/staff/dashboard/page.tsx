@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { StaffControls } from '@/components/staff/staff-controls';
 import { NowServingCard } from '@/components/staff/now-serving-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ListChecksIcon, UsersIcon, AlertTriangleIcon, TvIcon, Settings2Icon, BellRingIcon, MicIcon } from 'lucide-react';
+import { ListChecksIcon, UsersIcon, AlertTriangleIcon, TvIcon, Settings2Icon, BellRingIcon, MicIcon, UploadCloudIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -15,6 +15,7 @@ import type { Counter } from '@/app/admin/counters/page';
 import type { Office } from '@/app/admin/offices/page';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input"; // Import Input for file upload
 import { handleVoiceAnnouncement as serverHandleVoiceAnnouncement } from './actions';
 
 
@@ -51,15 +52,21 @@ export default function StaffDashboardPage() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>('voice');
   const [isAnnouncing, setIsAnnouncing] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const defaultAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [customAudioObject, setCustomAudioObject] = useState<HTMLAudioElement | null>(null);
+  const [customAudioFileName, setCustomAudioFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
 
   const { toast } = useToast();
 
   useEffect(() => {
     // Client-side only effect for audio element
-    audioRef.current = new Audio('/audio/notification.mp3');
-    audioRef.current.load(); // Preload the audio
+    if (typeof window !== "undefined") {
+      defaultAudioRef.current = new Audio('/audio/notification.mp3');
+      defaultAudioRef.current.load(); // Preload the audio
+    }
 
     const role = localStorage.getItem('mockUserRole');
     const officeId = localStorage.getItem('mockUserOfficeId');
@@ -190,18 +197,21 @@ export default function StaffDashboardPage() {
     const diffSecs = Math.floor((diffMs % 60000) / 1000);
     return `${diffMins}m ${diffSecs}s`;
   };
-
+  
   const playNotificationSound = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0; // Rewind to start
-      audioRef.current.play().catch(error => {
+    const audioToPlay = customAudioObject || defaultAudioRef.current;
+    if (audioToPlay) {
+      audioToPlay.currentTime = 0;
+      audioToPlay.play().catch(error => {
         console.error("Error playing notification sound:", error);
         toast({
           variant: 'destructive',
           title: 'Sound Playback Error',
-          description: 'Could not play notification sound. Ensure audio is enabled in your browser.',
+          description: 'Could not play sound. Ensure audio is enabled and file is correct.',
         });
       });
+    } else {
+        toast({ variant: 'destructive', title: 'Sound Error', description: 'Audio player not ready.'});
     }
   };
 
@@ -295,6 +305,24 @@ export default function StaffDashboardPage() {
     toast({ title: 'Ticket Skipped', description: `Ticket ${skippedTicketNumber} at ${assignedCounterName || 'counter'} skipped.` });
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (customAudioObject && customAudioObject.src.startsWith('blob:')) {
+        URL.revokeObjectURL(customAudioObject.src); // Revoke old object URL if exists
+      }
+      const newAudio = new Audio(URL.createObjectURL(file));
+      setCustomAudioObject(newAudio);
+      setCustomAudioFileName(file.name);
+      toast({ title: "Sound Uploaded", description: `"${file.name}" will be used for sound alerts this session.`});
+    }
+     // Reset file input to allow uploading the same file again if needed
+    if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+    }
+  };
+
+
   if (!isDataLoaded) {
     return (
       <StaffLayout>
@@ -346,9 +374,9 @@ export default function StaffDashboardPage() {
             isQueueEmpty={queue.length === 0}
             isTicketActive={!!currentTicket}
             isDisabled={!canOperateCounter && userRole !== 'admin'}
-            isAnnouncing={isAnnouncing}
+            isAnnouncing={isAnnouncing && notificationPreference === 'voice'}
+            playNotificationSound={playNotificationSound}
             setIsAnnouncing={setIsAnnouncing}
-            playNotificationSound={playNotificationSound} // Pass down the function
           />
         </div>
 
@@ -361,11 +389,12 @@ export default function StaffDashboardPage() {
                     </div>
                      <CardDescription>Choose how you want to be notified for ticket actions.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                     <RadioGroup 
                         defaultValue={notificationPreference} 
                         onValueChange={(value: string) => setNotificationPreference(value as NotificationPreference)}
                         disabled={!canOperateCounter && userRole !== 'admin'}
+                        className="mb-4"
                     >
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="voice" id="pref-voice" />
@@ -373,12 +402,33 @@ export default function StaffDashboardPage() {
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="sound" id="pref-sound" />
-                            <Label htmlFor="pref-sound" className="flex items-center gap-2"><BellRingIcon className="h-4 w-4"/> Simple Sound Alert</Label>
+                            <Label htmlFor="pref-sound" className="flex items-center gap-2"><BellRingIcon className="h-4 w-4"/> Sound Alert</Label>
                         </div>
                     </RadioGroup>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                        For sound alert, ensure you have an audio file at <code className="bg-muted px-1 py-0.5 rounded">public/audio/notification.mp3</code>.
-                    </p>
+                    
+                    {notificationPreference === 'sound' && (
+                        <div className="space-y-2 pt-2 border-t">
+                            <Label htmlFor="sound-upload" className="text-sm font-medium">Custom Sound (Session Only)</Label>
+                            <Input 
+                                id="sound-upload" 
+                                type="file" 
+                                accept="audio/*" 
+                                onChange={handleFileUpload}
+                                ref={fileInputRef}
+                                className="text-sm file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/20 file:text-primary hover:file:bg-primary/30"
+                                disabled={!canOperateCounter && userRole !== 'admin'}
+                            />
+                            {customAudioFileName && <p className="text-xs text-muted-foreground">Using: {customAudioFileName}</p>}
+                            <p className="text-xs text-muted-foreground">
+                                Uploaded sound is for this session only. Reverts to default on page reload. Default: <code className="bg-muted px-1 py-0.5 rounded">public/audio/notification.mp3</code>.
+                            </p>
+                        </div>
+                    )}
+                     {notificationPreference === 'voice' && (
+                         <p className="mt-3 text-xs text-muted-foreground">
+                            AI voice call-outs use Genkit. Ensure the Genkit server is running.
+                        </p>
+                     )}
                 </CardContent>
             </Card>
 
