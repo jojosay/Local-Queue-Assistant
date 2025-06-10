@@ -13,7 +13,7 @@ Before you begin, ensure you have the following installed:
 
 ## Environment Variables
 
-This project uses environment variables for configuration, especially for AI services and database connections.
+This project uses environment variables for configuration, especially for AI services.
 
 1.  Create a `.env` file in the root of the project if it doesn't already exist. You can copy `.env.example` if one is provided, or create it from scratch.
 2.  Add the following variables:
@@ -38,7 +38,7 @@ This project uses environment variables for configuration, especially for AI ser
     ```bash
     cd your-project-name
     ```
-3.  Install the dependencies:
+3.  Install the dependencies (this includes `concurrently` which is used to run multiple servers):
     ```bash
     npm install
     ```
@@ -46,29 +46,43 @@ This project uses environment variables for configuration, especially for AI ser
 
 ## Running the Development Servers
 
-For full functionality, including AI features, you'll need to run two development servers concurrently in separate terminal windows:
+For full functionality, including AI features, you'll need to run both the Next.js web application server and the Genkit AI flows server.
 
-1.  **Next.js Web Application Server**:
+**Recommended Method (Runs both servers concurrently):**
+
+```bash
+npm run start:all
+```
+This command will:
+- Start the Next.js web application on `http://localhost:9002` (by default).
+- Start the Genkit development UI and flow server, typically on `http://localhost:4000` (Genkit UI) and exposing flows on port `3400` (or as configured by Genkit).
+
+**Manual Method (Running servers in separate terminals):**
+
+If you prefer, you can run them separately:
+
+1.  **Terminal 1: Next.js Web Application Server**:
     This server handles the frontend and Next.js backend logic.
     ```bash
     npm run dev
     ```
     By default, this will start the application on `http://localhost:9002`.
 
-2.  **Genkit AI Flows Server**:
+2.  **Terminal 2: Genkit AI Flows Server**:
     This server runs your Genkit flows, making them available for the Next.js app to call.
     ```bash
     npm run genkit:dev
     ```
     This will typically start the Genkit development UI and flow server on `http://localhost:4000` (Genkit UI) and expose flows on port `3400` or as configured. The `src/ai/dev.ts` file loads your defined flows.
 
-    You can also use `npm run genkit:watch` to have Genkit automatically restart when flow files change.
+    You can also use `npm run genkit:watch` to have Genkit automatically restart when flow files change if running it manually.
 
-Once both servers are running, you can access the web application in your browser at `http://localhost:9002`.
+Once the servers are running (either via `npm run start:all` or manually), you can access the web application in your browser at `http://localhost:9002`.
 
 ## Data Persistence
 
 -   Currently, the application primarily uses the browser's `localStorage` for data (offices, counters, users, queue tickets). This means data is specific to your browser and will be lost if you clear your browser's site data.
+-   The Admin Dashboard includes **Export Data** and **Import Data** features. This allows you to save your application's state (offices, counters, users, queues) to a JSON file and restore it later, providing a way to back up your data.
 -   The `DATABASE_URL` in the `.env` file is a placeholder for a planned transition to PostgreSQL for more robust data storage.
 
 ---
