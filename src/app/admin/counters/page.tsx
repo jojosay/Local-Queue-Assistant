@@ -13,39 +13,37 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { CounterForm, type CounterFormValues } from '@/components/admin/counters/counter-form';
 import { useToast } from '@/hooks/use-toast';
-import type { Office } from '@/app/admin/offices/page'; // Import Office type
-import { initialMockOffices } from '@/app/admin/offices/page'; // Import mock offices
+import type { Office } from '@/app/admin/offices/page';
+import { initialMockOffices } from '@/app/admin/offices/page';
 
 export interface Counter {
   id: string;
   name: string;
-  officeId: string; // Changed from office: string
-  officeName?: string; // For display purposes
+  officeId: string;
+  officeName?: string;
   type: 'General' | 'Priority' | 'Specialized';
   priority: boolean;
   status: 'Open' | 'Closed';
 }
 
-// Updated initial mock data
-const initialMockCounters: Counter[] = [
+// Export initial mock data for use in other components
+export const initialMockCounters: Counter[] = [
   { id: 'ctr001', name: 'Counter 1', officeId: 'off001', officeName: 'Main City Branch', type: 'General', priority: false, status: 'Open' },
   { id: 'ctr002', name: 'Counter 2', officeId: 'off001', officeName: 'Main City Branch', type: 'Priority', priority: true, status: 'Open' },
   { id: 'ctr003', name: 'Counter 3', officeId: 'off002', officeName: 'North Suburb Office', type: 'Specialized', priority: false, status: 'Closed' },
+  { id: 'ctr004', name: 'Counter 4', officeId: 'off001', officeName: 'Main City Branch', type: 'General', priority: false, status: 'Open' },
 ];
 
 export default function CountersPage() {
   const [counters, setCounters] = useState<Counter[]>(initialMockCounters);
-  const [availableOffices, setAvailableOffices] = useState<Office[]>(initialMockOffices); // Manage available offices
+  const [availableOffices, setAvailableOffices] = useState<Office[]>(initialMockOffices);
   const [isCounterFormOpen, setIsCounterFormOpen] = useState(false);
   const [editingCounter, setEditingCounter] = useState<Counter | null>(null);
   const [counterToDelete, setCounterToDelete] = useState<Counter | null>(null);
   const { toast } = useToast();
 
-  // In a real app, availableOffices would likely be fetched or come from context
   useEffect(() => {
-    // For now, we use the imported mock data.
-    // If offices page updates its state, this won't reflect here unless passed or globally managed.
-    setAvailableOffices(initialMockOffices);
+    setAvailableOffices(initialMockOffices.filter(o => o.status === 'Active'));
   }, []);
 
 
@@ -194,3 +192,5 @@ export default function CountersPage() {
     </AdminLayout>
   );
 }
+
+    
