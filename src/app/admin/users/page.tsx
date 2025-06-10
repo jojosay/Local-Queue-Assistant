@@ -32,6 +32,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { toast } = useToast();
+  const [isLoaded, setIsLoaded] = useState(false); // Flag to track initial load
 
   useEffect(() => {
     // Load users from localStorage
@@ -45,15 +46,15 @@ export default function UsersPage() {
           loadedUsers = parsedUsers;
         } else {
           console.warn("'appUsers' in localStorage was not an array. Resetting localStorage for 'appUsers'.");
-          localStorage.setItem('appUsers', JSON.stringify([])); // Reset if not an array
+          localStorage.setItem('appUsers', JSON.stringify([])); 
         }
       } else {
         console.log("'appUsers' not found in localStorage. Initializing 'appUsers' in localStorage.");
-        localStorage.setItem('appUsers', JSON.stringify([])); // Initialize if not present
+        localStorage.setItem('appUsers', JSON.stringify([])); 
       }
     } catch (error) {
       console.error("Error processing 'appUsers' from localStorage. Resetting 'appUsers' in localStorage. Error:", error);
-      localStorage.setItem('appUsers', JSON.stringify([])); // Reset on any error
+      localStorage.setItem('appUsers', JSON.stringify([])); 
     }
     console.log('USER MGMT PAGE: Setting users state to:', loadedUsers);
     setUsers(loadedUsers);
@@ -76,17 +77,16 @@ export default function UsersPage() {
     } else {
       setAvailableOffices([]);
     }
+    setIsLoaded(true); // Mark initial load as complete
   }, []);
 
   useEffect(() => {
-    // Persist users to localStorage whenever `users` state changes, but only if it's not the initial empty load.
-    // This check prevents overwriting localStorage with an empty array if the initial load was empty.
-    if (users.length > 0 || localStorage.getItem('appUsers') !== null) {
-        // Avoid logging sensitive data in production. For debugging only:
-        // console.log('USER MGMT PAGE: Persisting users to localStorage:', users);
+    // Persist users to localStorage ONLY after initial load is complete
+    if (isLoaded) {
+        console.log('USER MGMT PAGE: Persisting users to localStorage:', users);
         localStorage.setItem('appUsers', JSON.stringify(users));
     }
-  }, [users]);
+  }, [users, isLoaded]);
 
   const handleOpenUserForm = (user?: User) => {
     setEditingUser(user || null);
@@ -192,8 +192,11 @@ export default function UsersPage() {
               ))}
             </TableBody>
           </Table>
-           {users.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">No users found. Click "Add New User" to get started.</p>
+           {!isLoaded && users.length === 0 && (
+            <p className="text-center text-muted-foreground py-8">Loading users...</p>
+           )}
+           {isLoaded && users.length === 0 && (
+            <p className="text-center text-muted-foreground py-8">No users found. Click "Add New User" to get started or register a new user.</p>
           )}
         </CardContent>
       </Card>
