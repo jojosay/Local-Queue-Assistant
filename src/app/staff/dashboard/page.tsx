@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StaffLayout } from '@/components/layouts/staff-layout';
 import { PageHeader } from '@/components/shared/page-header';
 import { StaffControls } from '@/components/staff/staff-controls';
@@ -51,11 +51,16 @@ export default function StaffDashboardPage() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>('voice');
   const [isAnnouncing, setIsAnnouncing] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
 
   const { toast } = useToast();
 
   useEffect(() => {
+    // Client-side only effect for audio element
+    audioRef.current = new Audio('/audio/notification.mp3');
+    audioRef.current.load(); // Preload the audio
+
     const role = localStorage.getItem('mockUserRole');
     const officeId = localStorage.getItem('mockUserOfficeId');
     const officeName = localStorage.getItem('mockUserOfficeName');
@@ -186,6 +191,20 @@ export default function StaffDashboardPage() {
     return `${diffMins}m ${diffSecs}s`;
   };
 
+  const playNotificationSound = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0; // Rewind to start
+      audioRef.current.play().catch(error => {
+        console.error("Error playing notification sound:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Sound Playback Error',
+          description: 'Could not play notification sound. Ensure audio is enabled in your browser.',
+        });
+      });
+    }
+  };
+
   const executeTicketNotification = async (ticketNumber: string, counterName: string, actionType: string) => {
     if (notificationPreference === 'voice') {
       setIsAnnouncing(true);
@@ -205,10 +224,10 @@ export default function StaffDashboardPage() {
         setIsAnnouncing(false);
       }
     } else if (notificationPreference === 'sound') {
-      // Placeholder for actual sound playback
+      playNotificationSound();
       toast({
-        title: 'Notification Sound 🔔',
-        description: `${actionType} ${ticketNumber} to ${counterName}. (Sound would play here)`,
+        title: 'Notification Alert 🔔',
+        description: `${actionType} ${ticketNumber} to ${counterName}.`,
       });
     }
   };
@@ -245,7 +264,6 @@ export default function StaffDashboardPage() {
     setQueue(prevQueue => prevQueue.filter(ticket => ticket.id !== nextCustomer.id));
     toast({ title: 'Called Next', description: `Now serving ticket ${newCurrentTicket.number} at ${assignedCounterName}.` });
     
-    // Execute notification based on preference
     executeTicketNotification(newCurrentTicket.number, assignedCounterName, "Calling ticket");
   };
 
@@ -330,6 +348,7 @@ export default function StaffDashboardPage() {
             isDisabled={!canOperateCounter && userRole !== 'admin'}
             isAnnouncing={isAnnouncing}
             setIsAnnouncing={setIsAnnouncing}
+            playNotificationSound={playNotificationSound} // Pass down the function
           />
         </div>
 
@@ -357,6 +376,9 @@ export default function StaffDashboardPage() {
                             <Label htmlFor="pref-sound" className="flex items-center gap-2"><BellRingIcon className="h-4 w-4"/> Simple Sound Alert</Label>
                         </div>
                     </RadioGroup>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                        For sound alert, ensure you have an audio file at <code className="bg-muted px-1 py-0.5 rounded">public/audio/notification.mp3</code>.
+                    </p>
                 </CardContent>
             </Card>
 

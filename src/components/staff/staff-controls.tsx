@@ -19,14 +19,15 @@ interface StaffControlsProps {
   isQueueEmpty: boolean;
   isTicketActive: boolean;
   isDisabled?: boolean;
-  isAnnouncing: boolean; // Receive from parent
-  setIsAnnouncing: (isAnnouncing: boolean) => void; // Receive from parent
+  isAnnouncing: boolean; 
+  setIsAnnouncing: (isAnnouncing: boolean) => void;
+  playNotificationSound: () => void; // Add this prop
 }
 
 export function StaffControls({ 
   currentTicketNumber, 
-  counterDetails, // General display string (e.g. "Counter 1 at Main Office")
-  assignedCounterName, // Specific name of the counter (e.g. "Counter 1")
+  counterDetails, 
+  assignedCounterName, 
   notificationPreference,
   onCallNext, 
   onComplete, 
@@ -35,11 +36,12 @@ export function StaffControls({
   isTicketActive,
   isDisabled = false,
   isAnnouncing,
-  setIsAnnouncing
+  setIsAnnouncing,
+  playNotificationSound 
 }: StaffControlsProps) {
   const { toast } = useToast();
 
-  const effectiveCounterName = assignedCounterName || counterDetails; // Use specific counter name if available for announcements
+  const effectiveCounterName = assignedCounterName || counterDetails; 
 
   const handleTicketActionNotification = async (ticketNum: string, counterNameForAction: string, actionDescription: string) => {
     if (isDisabled) {
@@ -73,10 +75,10 @@ export function StaffControls({
         setIsAnnouncing(false);
       }
     } else if (notificationPreference === 'sound') {
-      // Placeholder for actual sound playback
+      playNotificationSound(); // Use the passed function
       toast({
-        title: 'Notification Sound 🔔',
-        description: `${actionDescription} ${ticketNum} to ${counterNameForAction}. (Sound would play here)`,
+        title: 'Notification Alert 🔔',
+        description: `${actionDescription} ${ticketNum} to ${counterNameForAction}.`,
       });
     }
   };
@@ -86,7 +88,7 @@ export function StaffControls({
         toast({ variant: 'destructive', title: 'Action Disabled', description: 'Cannot call next. Ensure you are assigned to an open counter.' });
         return;
     }
-    onCallNext(); // The parent (StaffDashboardPage) will handle the initial announcement/sound
+    onCallNext(); 
   };
 
   const handleLocalComplete = () => {
@@ -153,11 +155,11 @@ export function StaffControls({
           <SkipForwardIcon className="mr-2 h-5 w-5" /> Skip
         </Button>
         <Button onClick={onRecall} variant="outline" size="lg" disabled={isDisabled || isAnnouncing || !isTicketActive}>
-          {isAnnouncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isAnnouncing && notificationPreference === 'voice' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <RotateCcwIcon className="mr-2 h-5 w-5" /> Recall
         </Button>
          <Button onClick={onAnnounceManually} variant="outline" size="lg" className="col-span-2 md:col-span-3" disabled={isDisabled || isAnnouncing || !isTicketActive}>
-          {isAnnouncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isAnnouncing && notificationPreference === 'voice' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Volume2Icon className="mr-2 h-5 w-5" /> Announce Current Ticket
         </Button>
       </CardContent>
