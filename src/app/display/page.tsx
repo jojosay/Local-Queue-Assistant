@@ -1,3 +1,4 @@
+
 import { QueueBoard } from '@/components/display/queue-board';
 import { SiteLogo } from '@/components/shared/site-logo';
 import { TvIcon } from 'lucide-react';
