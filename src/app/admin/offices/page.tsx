@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layouts/admin-layout';
 import { PageHeader } from '@/components/shared/page-header';
 import { BuildingIcon, PlusCircleIcon, Trash2Icon, EditIcon } from 'lucide-react';
@@ -21,19 +21,28 @@ export interface Office {
   status: 'Active' | 'Inactive';
 }
 
-// Export initial mock data for use in other components (e.g., CounterForm)
-export const initialMockOffices: Office[] = [
-  { id: 'off001', name: 'Main City Branch', address: '123 Main St, Anytown', counters: 5, status: 'Active' },
-  { id: 'off002', name: 'North Suburb Office', address: '456 North Rd, Suburbia', counters: 3, status: 'Active' },
-  { id: 'off003', name: 'Westside Kiosk', address: '789 West Ave, Westville', counters: 1, status: 'Inactive' },
-];
+// Removed initialMockOffices
+// export const initialMockOffices: Office[] = [ ... ];
 
 export default function OfficesPage() {
-  const [offices, setOffices] = useState<Office[]>(initialMockOffices);
+  const [offices, setOffices] = useState<Office[]>([]); // Initialize with empty array
   const [isOfficeFormOpen, setIsOfficeFormOpen] = useState(false);
   const [editingOffice, setEditingOffice] = useState<Office | null>(null);
   const [officeToDelete, setOfficeToDelete] = useState<Office | null>(null);
   const { toast } = useToast();
+
+  // Persist and load offices from localStorage
+  useEffect(() => {
+    const storedOffices = localStorage.getItem('appOffices');
+    if (storedOffices) {
+      setOffices(JSON.parse(storedOffices));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('appOffices', JSON.stringify(offices));
+  }, [offices]);
+
 
   const handleOpenOfficeForm = (office?: Office) => {
     setEditingOffice(office || null);
@@ -52,7 +61,7 @@ export default function OfficesPage() {
     } else {
       const newOffice: Office = {
         ...data,
-        id: `off${Math.floor(Math.random() * 1000) + 100}`,
+        id: `off${Date.now()}${Math.floor(Math.random() * 100)}`, // More unique ID
         counters: 0, 
       };
       setOffices([...offices, newOffice]);
@@ -68,6 +77,13 @@ export default function OfficesPage() {
   const handleConfirmDelete = () => {
     if (officeToDelete) {
       setOffices(offices.filter(o => o.id !== officeToDelete.id));
+      // Also remove counters associated with this office
+      const storedCounters = localStorage.getItem('appCounters');
+      if (storedCounters) {
+        const counters: Counter[] = JSON.parse(storedCounters);
+        const updatedCounters = counters.filter(c => c.officeId !== officeToDelete.id);
+        localStorage.setItem('appCounters', JSON.stringify(updatedCounters));
+      }
       toast({ title: "Office Deleted", description: `Office ${officeToDelete.name} has been deleted.` });
       setOfficeToDelete(null);
     }
@@ -168,4 +184,15 @@ export default function OfficesPage() {
       
     </AdminLayout>
   );
+}
+
+// Minimal interface for Counter needed for cascading delete
+interface Counter {
+  id: string;
+  name: string;
+  officeId: string;
+  officeName?: string;
+  type: 'General' | 'Priority' | 'Specialized';
+  priority: boolean;
+  status: 'Open' | 'Closed';
 }

@@ -3,10 +3,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { StarIcon, ChevronRightIcon, BuildingIcon } from 'lucide-react';
+import { StarIcon, ChevronRightIcon, BuildingIcon, TvIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-interface DisplayCounter {
+interface DisplayCounterData {
   id: string;
   name: string;
   currentTicket: string | null;
@@ -14,27 +14,22 @@ interface DisplayCounter {
   nextTickets: string[];
 }
 
-export interface OfficeWithCounters {
+export interface OfficeWithCountersAndTickets {
   id: string;
   name: string;
   address: string;
-  counters: DisplayCounter[];
+  counters: DisplayCounterData[];
 }
 
 interface QueueBoardProps {
-  officesWithCounters: OfficeWithCounters[];
+  officesWithCounters: OfficeWithCountersAndTickets[];
 }
 
-export function QueueBoard({ officesWithCounters: initialData }: QueueBoardProps) {
-  const [officesData, setOfficesData] = useState(initialData);
+export function QueueBoard({ officesWithCounters }: QueueBoardProps) {
   const [currentTime, setCurrentTime] = useState<string | null>(null);
 
   useEffect(() => {
-    // Ensure initialData is passed correctly and updates state
-    setOfficesData(initialData);
-  }, [initialData]);
-
-  useEffect(() => {
+    // Client-side effect to update current time
     const updateCurrentTime = () => {
       setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     };
@@ -43,55 +38,20 @@ export function QueueBoard({ officesWithCounters: initialData }: QueueBoardProps
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOfficesData(prevOfficesData => 
-        prevOfficesData.map(office => ({
-          ...office,
-          counters: office.counters.map(counter => {
-            let newCurrentTicket = counter.currentTicket;
-            let newNextTickets = [...counter.nextTickets];
 
-            if (Math.random() < 0.15) { // Chance to advance a ticket
-              if (newNextTickets.length > 0) {
-                newCurrentTicket = newNextTickets.shift() || null;
-              } else if (newCurrentTicket && Math.random() < 0.3) { // Chance to clear current ticket if no next
-                newCurrentTicket = null;
-              }
-            }
-            
-            if (Math.random() < 0.1 && newNextTickets.length < 5) { // Chance to add a new ticket to queue
-               const prefix = counter.name.substring(0,1).toUpperCase() + office.name.substring(0,1).toUpperCase();
-               const newTicketNumber = `${prefix}-${Math.floor(100 + Math.random() * 899)}`;
-               newNextTickets.push(newTicketNumber);
-            }
-
-            return {
-              ...counter,
-              currentTicket: newCurrentTicket,
-              nextTickets: newNextTickets.slice(-5), // Keep last 5
-            };
-          })
-        }))
-      );
-    }, 7000); // Update every 7 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  if (!officesData || officesData.length === 0) {
+  if (!officesWithCounters || officesWithCounters.length === 0) {
     return (
       <div className="text-center py-10">
-        <BuildingIcon className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-        <p className="text-xl text-gray-400">No office data to display.</p>
-        <p className="text-gray-500">Please ensure offices and counters are configured and active.</p>
+        <TvIcon className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+        <p className="text-xl text-gray-400">No active queue data to display.</p>
+        <p className="text-gray-500">Ensure offices and counters are active and tickets are being processed.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      {officesData.map((office) => (
+      {officesWithCounters.map((office) => (
         <section key={office.id} aria-labelledby={`office-title-${office.id}`}>
           <div className="flex items-center gap-3 mb-4">
             <BuildingIcon className="h-8 w-8 text-primary" />
@@ -131,7 +91,7 @@ export function QueueBoard({ officesWithCounters: initialData }: QueueBoardProps
                           <h4 className="text-sm md:text-base font-medium text-gray-200 mb-2">Next Up:</h4>
                           <ul className="space-y-1">
                             {counter.nextTickets.slice(0,3).map((ticket, index) => (
-                              <li key={`${counter.id}-next-${index}`} className="flex items-center text-base md:text-lg text-gray-300">
+                              <li key={`${counter.id}-next-${ticket}-${index}`} className="flex items-center text-base md:text-lg text-gray-300">
                                 <ChevronRightIcon className="h-5 w-5 mr-1 text-gray-400" /> 
                                 {ticket}
                               </li>
@@ -140,6 +100,9 @@ export function QueueBoard({ officesWithCounters: initialData }: QueueBoardProps
                         </div>
                       </>
                     )}
+                     {counter.nextTickets.length === 0 && !counter.currentTicket && (
+                        <p className="text-center text-sm text-gray-400 pt-2">No tickets waiting for this counter.</p>
+                     )}
                   </CardContent>
                 </Card>
               ))}
@@ -152,5 +115,3 @@ export function QueueBoard({ officesWithCounters: initialData }: QueueBoardProps
     </div>
   );
 }
-
-    

@@ -12,14 +12,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle } from 'lucide-react';
-import type { Office } from '@/app/admin/offices/page'; // Import the more complete Office type
+import type { Office } from '@/app/admin/offices/page'; 
 
 interface TicketGenerationFormProps {
-  offices: Office[]; // Use the imported Office type
+  offices: Office[]; 
 }
 
+// Define QueueItem structure, as tickets will be added to a shared queue
+interface QueueItem {
+  id: string;
+  number: string;
+  service: string; // Could be office name or a specific service type later
+  officeId: string;
+  priority?: boolean;
+  timestamp: number;
+}
+
+
 const ticketFormSchema = z.object({
-  officeId: z.string().min(1, { message: 'Please select a service or office.' }),
+  officeId: z.string().min(1, { message: 'Please select an office.' }),
+  // Add other fields like service type if needed in the future
 });
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
@@ -27,18 +39,30 @@ type TicketFormValues = z.infer<typeof ticketFormSchema>;
 export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [generatedTicket, setGeneratedTicket] = useState<string | null>(null);
+  const [generatedTicket, setGeneratedTicket] = useState<QueueItem | null>(null);
   const [currentTime, setCurrentTime] = useState<string | null>(null);
+  const [nextTicketNumber, setNextTicketNumber] = useState(100);
+
 
   useEffect(() => {
-    // This effect runs only on the client after hydration
     const updateCurrentTime = () => {
       setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     };
-    updateCurrentTime(); // Initial call
-    const timer = setInterval(updateCurrentTime, 1000); // Update every second
+    updateCurrentTime(); 
+    const timer = setInterval(updateCurrentTime, 1000); 
+    
+    // Load next ticket number from local storage to maintain sequence across sessions
+    const storedTicketNum = localStorage.getItem('nextTicketNumber');
+    if (storedTicketNum) {
+      setNextTicketNumber(parseInt(storedTicketNum, 10));
+    }
+
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('nextTicketNumber', nextTicketNumber.toString());
+  }, [nextTicketNumber]);
 
 
   const form = useForm<TicketFormValues>({
@@ -48,24 +72,44 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
     },
   });
 
-  // Mock ticket generation
   async function onSubmit(values: TicketFormValues) {
     setIsLoading(true);
     setGeneratedTicket(null);
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
 
     const selectedOffice = offices.find(o => o.id === values.officeId);
-    const prefix = selectedOffice ? selectedOffice.name.substring(0, 1).toUpperCase() : 'T';
-    // Ensure ticket numbers are somewhat unique by adding a timestamp component
-    const ticketNumber = `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
+    if (!selectedOffice) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Selected office not found.' });
+      setIsLoading(false);
+      return;
+    }
+
+    const prefix = selectedOffice.name.substring(0, 1).toUpperCase();
+    const ticketNumberStr = `${prefix}-${nextTicketNumber}`;
+    setNextTicketNumber(prev => prev + 1);
     
-    setGeneratedTicket(ticketNumber);
+    const newTicket: QueueItem = {
+      id: `tkt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      number: ticketNumberStr,
+      service: selectedOffice.name, // Using office name as service for now
+      officeId: selectedOffice.id,
+      priority: false, // Default to non-priority
+      timestamp: Date.now(),
+    };
+
+    // Add to a shared queue in localStorage
+    const storedQueue = localStorage.getItem('appQueue');
+    const queue: QueueItem[] = storedQueue ? JSON.parse(storedQueue) : [];
+    queue.push(newTicket);
+    localStorage.setItem('appQueue', JSON.stringify(queue));
+    
+    setGeneratedTicket(newTicket);
     setIsLoading(false);
     toast({
       title: 'Ticket Generated!',
-      description: `Your ticket number is ${ticketNumber}. Please note it down.`,
+      description: `Your ticket number is ${newTicket.number}. Please note it down.`,
     });
-    form.reset(); // Reset form after successful generation
+    form.reset(); 
   }
 
   if (generatedTicket) {
@@ -76,10 +120,10 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
             <CheckCircle className="h-16 w-16 text-green-500" />
           </div>
           <CardTitle className="text-2xl font-headline text-primary">Your Ticket</CardTitle>
-          <CardDescription>Please wait for your number to be called.</CardDescription>
+          <CardDescription>Please wait for your number to be called for {generatedTicket.service}.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-6xl font-bold text-primary">{generatedTicket}</p>
+          <p className="text-6xl font-bold text-primary">{generatedTicket.number}</p>
           <p className="text-muted-foreground">Issued at: {currentTime || 'Loading time...'}</p>
           <Button onClick={() => setGeneratedTicket(null)} className="w-full">Get Another Ticket</Button>
         </CardContent>
@@ -95,11 +139,11 @@ export function TicketGenerationForm({ offices }: TicketGenerationFormProps) {
           name="officeId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Select Service / Office</FormLabel>
+              <FormLabel>Select Office / Service Location</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose an option" />
+                    <SelectValue placeholder="Choose an office" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>

@@ -5,17 +5,21 @@ import { TicketGenerationForm } from '@/components/kiosk/ticket-generation-form'
 import { SiteLogo } from '@/components/shared/site-logo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TicketIcon } from 'lucide-react';
-import { initialMockOffices, type Office } from '@/app/admin/offices/page'; // Import mock offices and Office type
+import type { Office } from '@/app/admin/offices/page'; 
 import { useState, useEffect } from 'react';
 
 export default function KioskPage() {
-  // In a real app, this would be fetched. For now, we use the imported mock data.
-  // We filter for 'Active' offices to simulate a real scenario.
   const [activeOffices, setActiveOffices] = useState<Office[]>([]);
 
   useEffect(() => {
-    // Filter for active offices
-    setActiveOffices(initialMockOffices.filter(office => office.status === 'Active'));
+    // Load offices from localStorage
+    const storedOffices = localStorage.getItem('appOffices');
+    if (storedOffices) {
+      const allOffices: Office[] = JSON.parse(storedOffices);
+      setActiveOffices(allOffices.filter(office => office.status === 'Active'));
+    } else {
+      setActiveOffices([]);
+    }
   }, []);
 
   return (
@@ -36,7 +40,7 @@ export default function KioskPage() {
             <TicketGenerationForm offices={activeOffices} />
           ) : (
             <p className="text-center text-muted-foreground py-4">
-              No active offices available at the moment. Please check back later.
+              No active offices available at the moment. Please check back later or add offices in the admin panel.
             </p>
           )}
         </CardContent>

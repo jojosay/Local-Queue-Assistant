@@ -13,8 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { CounterForm, type CounterFormValues } from '@/components/admin/counters/counter-form';
 import { useToast } from '@/hooks/use-toast';
-import type { Office } from '@/app/admin/offices/page';
-import { initialMockOffices } from '@/app/admin/offices/page';
+import type { Office } from '@/app/admin/offices/page'; // Use the Office interface
 
 export interface Counter {
   id: string;
@@ -26,25 +25,48 @@ export interface Counter {
   status: 'Open' | 'Closed';
 }
 
-// Export initial mock data for use in other components
-export const initialMockCounters: Counter[] = [
-  { id: 'ctr001', name: 'Counter 1', officeId: 'off001', officeName: 'Main City Branch', type: 'General', priority: false, status: 'Open' },
-  { id: 'ctr002', name: 'Counter 2', officeId: 'off001', officeName: 'Main City Branch', type: 'Priority', priority: true, status: 'Open' },
-  { id: 'ctr003', name: 'Counter 3', officeId: 'off002', officeName: 'North Suburb Office', type: 'Specialized', priority: false, status: 'Closed' },
-  { id: 'ctr004', name: 'Counter 4', officeId: 'off001', officeName: 'Main City Branch', type: 'General', priority: false, status: 'Open' },
-];
+// Removed initialMockCounters
+// export const initialMockCounters: Counter[] = [ ... ];
 
 export default function CountersPage() {
-  const [counters, setCounters] = useState<Counter[]>(initialMockCounters);
-  const [availableOffices, setAvailableOffices] = useState<Office[]>(initialMockOffices);
+  const [counters, setCounters] = useState<Counter[]>([]); // Initialize with empty array
+  const [availableOffices, setAvailableOffices] = useState<Office[]>([]);
   const [isCounterFormOpen, setIsCounterFormOpen] = useState(false);
   const [editingCounter, setEditingCounter] = useState<Counter | null>(null);
   const [counterToDelete, setCounterToDelete] = useState<Counter | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    setAvailableOffices(initialMockOffices.filter(o => o.status === 'Active'));
+    // Load counters from localStorage
+    const storedCounters = localStorage.getItem('appCounters');
+    if (storedCounters) {
+      setCounters(JSON.parse(storedCounters));
+    }
+    // Load offices from localStorage
+    const storedOffices = localStorage.getItem('appOffices');
+    if (storedOffices) {
+      const allOffices: Office[] = JSON.parse(storedOffices);
+      setAvailableOffices(allOffices.filter(o => o.status === 'Active'));
+    } else {
+      setAvailableOffices([]);
+    }
   }, []);
+
+  useEffect(() => {
+    // Persist counters to localStorage
+    localStorage.setItem('appCounters', JSON.stringify(counters));
+     // Update counter count in offices
+     const storedOffices = localStorage.getItem('appOffices');
+     if (storedOffices) {
+       let offices: Office[] = JSON.parse(storedOffices);
+       offices = offices.map(office => ({
+         ...office,
+         counters: counters.filter(c => c.officeId === office.id).length
+       }));
+       localStorage.setItem('appOffices', JSON.stringify(offices));
+     }
+
+  }, [counters]);
 
 
   const handleOpenCounterForm = (counter?: Counter) => {
@@ -68,7 +90,7 @@ export default function CountersPage() {
       const newCounter: Counter = {
         ...data,
         officeName,
-        id: `ctr${Math.floor(Math.random() * 1000) + 100}`,
+        id: `ctr${Date.now()}${Math.floor(Math.random() * 100)}`, // More unique ID
       };
       setCounters([...counters, newCounter]);
       toast({ title: "Counter Added", description: `Counter ${data.name} has been added successfully.` });
@@ -105,7 +127,7 @@ export default function CountersPage() {
             <PlusCircleIcon className="mr-2 h-4 w-4" /> Add New Counter
           </Button>
            {availableOffices.length === 0 && (
-            <p className="text-sm text-destructive">Please add offices before adding counters.</p>
+            <p className="text-sm text-destructive">Please add active offices before adding counters.</p>
           )}
         </CardHeader>
         <CardContent>
@@ -137,7 +159,7 @@ export default function CountersPage() {
                     </span>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenCounterForm(counter)} disabled={availableOffices.length === 0}>
+                    <Button variant="outline" size="sm" onClick={() => handleOpenCounterForm(counter)} disabled={availableOffices.length === 0 && !editingCounter}>
                       <EditIcon className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(counter)}>
@@ -192,5 +214,3 @@ export default function CountersPage() {
     </AdminLayout>
   );
 }
-
-    

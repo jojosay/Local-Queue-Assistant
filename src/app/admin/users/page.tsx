@@ -14,7 +14,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { UserForm, type UserSubmitValues } from '@/components/admin/users/user-form';
 import { useToast } from '@/hooks/use-toast';
 import type { Office } from '@/app/admin/offices/page';
-import { initialMockOffices } from '@/app/admin/offices/page';
 
 export interface User {
   id: string;
@@ -26,24 +25,37 @@ export interface User {
   officeName?: string;
 }
 
-const initialMockUsers: User[] = [
-  { id: 'usr001', name: 'Alice Smith', email: 'alice@example.com', role: 'Admin', status: 'Active' },
-  { id: 'usr002', name: 'Bob Johnson', email: 'bob@example.com', role: 'Staff', status: 'Active', officeId: 'off001', officeName: 'Main City Branch' },
-  { id: 'usr003', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Staff', status: 'Inactive', officeId: 'off002', officeName: 'North Suburb Office' },
-  { id: 'usr004', name: 'Diana Prince', email: 'diana@example.com', role: 'Staff', status: 'Active', officeId: 'off001', officeName: 'Main City Branch' },
-];
+// Removed initialMockUsers
+// const initialMockUsers: User[] = [ ... ];
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(initialMockUsers);
-  const [availableOffices, setAvailableOffices] = useState<Office[]>(initialMockOffices);
+  const [users, setUsers] = useState<User[]>([]); // Initialize with empty array
+  const [availableOffices, setAvailableOffices] = useState<Office[]>([]);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    setAvailableOffices(initialMockOffices.filter(o => o.status === 'Active'));
+    // Load users from localStorage
+    const storedUsers = localStorage.getItem('appUsers');
+    if (storedUsers) {
+      setUsers(JSON.parse(storedUsers));
+    }
+    // Load offices from localStorage
+    const storedOffices = localStorage.getItem('appOffices');
+    if (storedOffices) {
+      const allOffices: Office[] = JSON.parse(storedOffices);
+      setAvailableOffices(allOffices.filter(o => o.status === 'Active'));
+    } else {
+      setAvailableOffices([]);
+    }
   }, []);
+
+  useEffect(() => {
+    // Persist users to localStorage
+    localStorage.setItem('appUsers', JSON.stringify(users));
+  }, [users]);
 
   const handleOpenUserForm = (user?: User) => {
     setEditingUser(user || null);
@@ -70,7 +82,7 @@ export default function UsersPage() {
         status: data.status,
         officeId: data.officeId,
         officeName,
-        id: `usr${Math.floor(Math.random() * 1000) + 100}`,
+        id: `usr${Date.now()}${Math.floor(Math.random() * 100)}`, // More unique ID
       };
       setUsers([...users, newUser]);
       toast({ title: "User Added", description: `User ${data.name} has been added successfully.` });

@@ -1,46 +1,101 @@
 
 'use client';
 
-import { QueueBoard, type OfficeWithCounters } from '@/components/display/queue-board';
+import { QueueBoard, type OfficeWithCountersAndTickets } from '@/components/display/queue-board';
 import { SiteLogo } from '@/components/shared/site-logo';
 import { TvIcon, BuildingIcon } from 'lucide-react';
-import { initialMockOffices, type Office } from '@/app/admin/offices/page';
-import { initialMockCounters, type Counter } from '@/app/admin/counters/page';
+import type { Office } from '@/app/admin/offices/page';
+import type { Counter } from '@/app/admin/counters/page';
 import { useEffect, useState } from 'react';
 
-// Helper function to generate some mock tickets for a counter
-const generateMockTickets = (count: number, prefix: string) => {
-  return Array.from({ length: count }, (_, i) => `${prefix}-${Math.floor(100 + Math.random() * 20) + i}`);
-};
+interface Ticket {
+  id: string;
+  number: string;
+  service: string;
+  officeId?: string;
+  timestamp: number;
+}
 
 export default function DisplayPage() {
-  const [officesWithCountersData, setOfficesWithCountersData] = useState<OfficeWithCounters[]>([]);
+  const [officesWithCountersData, setOfficesWithCountersData] = useState<OfficeWithCountersAndTickets[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const activeOffices = initialMockOffices.filter(office => office.status === 'Active');
-    
-    const data: OfficeWithCounters[] = activeOffices.map(office => {
-      const officeCounters = initialMockCounters
-        .filter(counter => counter.officeId === office.id && counter.status === 'Open')
-        .map(counter => ({
-          id: counter.id,
-          name: counter.name,
-          priority: counter.priority,
-          currentTicket: Math.random() > 0.3 ? generateMockTickets(1, counter.name.substring(0,1).toUpperCase())[0] : null, // Simulate some initially serving
-          nextTickets: generateMockTickets(Math.floor(2 + Math.random() * 3), counter.name.substring(0,1).toUpperCase() + counter.id.slice(-1)), // Simulate 2-4 next tickets
-        }));
+    const loadAndProcessData = () => {
+      const storedOffices = localStorage.getItem('appOffices');
+      const storedCounters = localStorage.getItem('appCounters');
+      const storedQueue = localStorage.getItem('appQueue'); // All waiting tickets
+      
+      const allOffices: Office[] = storedOffices ? JSON.parse(storedOffices) : [];
+      const allCounters: Counter[] = storedCounters ? JSON.parse(storedCounters) : [];
+      const allTickets: Ticket[] = storedQueue ? JSON.parse(storedQueue) : [];
 
-      return {
-        id: office.id,
-        name: office.name,
-        address: office.address,
-        counters: officeCounters,
-      };
-    }).filter(office => office.counters.length > 0); // Only include offices that have open counters
+      const activeOffices = allOffices.filter(office => office.status === 'Active');
+      
+      const data: OfficeWithCountersAndTickets[] = activeOffices.map(office => {
+        const officeCounters = allCounters
+          .filter(counter => counter.officeId === office.id && counter.status === 'Open')
+          .map(counter => {
+            // Find current ticket for this counter (simple logic: one ticket per counter for display)
+            // In a real app, this would come from staff's 'currentTicket' state for this specific counter.
+            // For simulation, we'll try to find one if it's stored for this "counter" (office in this case)
+            const currentTicketKey = 'appCurrentTicket-' + counter.officeId; // Assuming counter uses officeId as its serving context for now
+            const storedCurrentTicket = localStorage.getItem(currentTicketKey);
+            let currentTicketObj: Ticket | null = null;
+            if(storedCurrentTicket) {
+                const parsed = JSON.parse(storedCurrentTicket);
+                // Simple check if this "current" ticket is for this office (or counter's office)
+                if(parsed.officeId === counter.officeId) {
+                    currentTicketObj = parsed;
+                }
+            }
 
-    setOfficesWithCountersData(data);
+
+            // Filter waiting tickets for this specific counter/office
+            const nextTicketsForCounter = allTickets
+              .filter(t => t.officeId === counter.officeId && t.id !== currentTicketObj?.id) // Exclude current ticket
+              .sort((a,b) => a.timestamp - b.timestamp) // Oldest first
+              .map(t => t.number)
+              .slice(0, 4); // Show next 4
+
+            return {
+              id: counter.id,
+              name: counter.name,
+              priority: counter.priority,
+              currentTicket: currentTicketObj ? currentTicketObj.number : null,
+              nextTickets: nextTicketsForCounter,
+            };
+          });
+
+        return {
+          id: office.id,
+          name: office.name,
+          address: office.address,
+          counters: officeCounters,
+        };
+      }).filter(office => office.counters.length > 0); 
+
+      setOfficesWithCountersData(data);
+      setIsLoading(false);
+    };
+
+    loadAndProcessData(); // Initial load
+
+    // Set up an interval to refresh data from localStorage to simulate live updates
+    const intervalId = setInterval(loadAndProcessData, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
   }, []);
 
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-900 text-white p-4 md:p-8 items-center justify-center">
+        <TvIcon className="h-16 w-16 animate-pulse text-primary" />
+        <p className="mt-4 text-xl">Loading Queue Display...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-900 text-white p-4 md:p-8 animate-fade-in">
@@ -58,7 +113,7 @@ export default function DisplayPage() {
           <div className="flex flex-col items-center justify-center h-full text-center">
             <BuildingIcon className="h-24 w-24 text-gray-600 mb-4" />
             <h2 className="text-3xl font-semibold text-gray-400 mb-2">No Active Offices or Counters</h2>
-            <p className="text-gray-500">Please check back later or ensure offices and counters are active in the admin panel.</p>
+            <p className="text-gray-500">Please add and activate offices and counters in the admin panel.</p>
           </div>
         )}
       </main>
@@ -68,5 +123,3 @@ export default function DisplayPage() {
     </div>
   );
 }
-
-    

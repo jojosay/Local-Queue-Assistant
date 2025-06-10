@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,17 +33,20 @@ export function LoginForm() {
     },
   });
 
-  // Mock login function
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Mock authentication logic
+    localStorage.removeItem('mockAuthToken');
+    localStorage.removeItem('mockUserRole');
+    localStorage.removeItem('mockUserEmail');
+    localStorage.removeItem('mockUserOfficeId');
+    localStorage.removeItem('mockUserOfficeName');
+
     if (values.email === 'admin@example.com' && values.password === 'password') {
-      // Simulate setting auth token
       localStorage.setItem('mockAuthToken', 'admin-token');
       localStorage.setItem('mockUserRole', 'admin');
+      localStorage.setItem('mockUserEmail', values.email);
       toast({
         title: 'Login Successful',
         description: 'Redirecting to admin dashboard...',
@@ -51,6 +55,10 @@ export function LoginForm() {
     } else if (values.email === 'staff@example.com' && values.password === 'password') {
       localStorage.setItem('mockAuthToken', 'staff-token');
       localStorage.setItem('mockUserRole', 'staff');
+      localStorage.setItem('mockUserEmail', values.email);
+      // Provide a mock office context for the staff user
+      localStorage.setItem('mockUserOfficeId', 'staff-office-001'); 
+      localStorage.setItem('mockUserOfficeName', 'Staff Assigned Office');
       toast({
         title: 'Login Successful',
         description: 'Redirecting to staff dashboard...',
